@@ -33,10 +33,10 @@ struct ContentView: View {
                 if !sidebarCollapsed {
                     SidebarView(manager: manager, settings: settings)
                         .frame(width: min(280, geometry.size.width * 0.25))
-                    Divider()
+                    sidebarToggleDivider
                 } else {
                     collapsedSidebar
-                    Divider()
+                    sidebarToggleDivider
                 }
 
                 mainContentArea
@@ -88,8 +88,13 @@ struct ContentView: View {
             .keyboardShortcut("l", modifiers: [.command, .shift]).opacity(0))
         .background(Button("") { compileLatex() }
             .keyboardShortcut("b", modifiers: [.command]).opacity(0))
+        .background(Button("") { sidebarCollapsed.toggle() }
+            .keyboardShortcut("s", modifiers: [.command, .shift]).opacity(0))
         .onReceive(NotificationCenter.default.publisher(for: .toggleAIDrawer)) { _ in
             showAIDrawer.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
+            sidebarCollapsed.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .exportNote)) { notification in
             if let format = notification.userInfo?["format"] as? ExportService.ExportFormat {
@@ -119,6 +124,24 @@ struct ContentView: View {
     }
 
     // MARK: - 折叠侧边栏
+
+    private var sidebarToggleDivider: some View {
+        Button(action: { sidebarCollapsed.toggle() }) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+                .overlay(
+                    Image(systemName: sidebarCollapsed ? "chevron.right" : "chevron.left")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .offset(x: sidebarCollapsed ? 10 : -10)
+                )
+        }
+        .buttonStyle(.borderless)
+        .frame(width: 20)
+        .contentShape(Rectangle())
+        .help(sidebarCollapsed ? "显示目录栏 (Cmd+Shift+S)" : "隐藏目录栏 (Cmd+Shift+S)")
+    }
 
     private var collapsedSidebar: some View {
         VStack(spacing: 8) {
@@ -340,6 +363,17 @@ struct ContentView: View {
 
     private var toolbarContent: some View {
         HStack(spacing: 6) {
+            // 侧边栏切换
+            Button(action: { sidebarCollapsed.toggle() }) {
+                Image(systemName: "sidebar.left")
+                    .font(.body)
+                    .foregroundColor(sidebarCollapsed ? .secondary : .accentColor)
+            }
+            .buttonStyle(.borderless)
+            .help(sidebarCollapsed ? "显示目录栏 (Cmd+Shift+S)" : "隐藏目录栏 (Cmd+Shift+S)")
+
+            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
+
             Picker("", selection: $settings.editorLanguage) {
                 ForEach(EditorLanguage.allCases, id: \.self) { lang in
                     Text(lang.displayName).tag(lang)

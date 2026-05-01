@@ -67,6 +67,13 @@ struct ZenKithApp: App {
 
             Divider()
 
+            Button("显示/隐藏 目录栏") {
+                NotificationCenter.default.post(name: .toggleSidebar, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+
+            Divider()
+
             Button("显示/隐藏 AI 助手") {
                 NotificationCenter.default.post(name: .toggleAIDrawer, object: nil)
             }
@@ -107,6 +114,7 @@ struct ZenKithApp: App {
 
 extension Notification.Name {
     static let toggleAIDrawer = Notification.Name("com.markflow.toggleAIDrawer")
+    static let toggleSidebar = Notification.Name("com.markflow.toggleSidebar")
     static let exportNote = Notification.Name("com.markflow.exportNote")
     static let directoryDidChange = Notification.Name("com.markflow.directoryDidChange")
 }
