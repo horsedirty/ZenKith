@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F7A9C8292FA4E97900D1CA45 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C8282FA4E97900D1CA45 /* Markdown */; };
+		F7A9C82C2FA4E9B500D1CA45 /* CodeEditor in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */; };
+		F7A9C82F2FA4E9F800D1CA45 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		F7A9C8192FA4E92700D1CA45 /* ZenKith.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZenKith.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +29,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F7A9C82C2FA4E9B500D1CA45 /* CodeEditor in Frameworks */,
+				F7A9C8292FA4E97900D1CA45 /* Markdown in Frameworks */,
+				F7A9C82F2FA4E9F800D1CA45 /* KeychainAccess in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +74,9 @@
 			);
 			name = ZenKith;
 			packageProductDependencies = (
+				F7A9C8282FA4E97900D1CA45 /* Markdown */,
+				F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */,
+				F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */,
 			);
 			productName = ZenKith;
 			productReference = F7A9C8192FA4E92700D1CA45 /* ZenKith.app */;
@@ -94,6 +106,11 @@
 			);
 			mainGroup = F7A9C8102FA4E92700D1CA45;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F7A9C8272FA4E97900D1CA45 /* XCRemoteSwiftPackageReference "swift-markdown" */,
+				F7A9C82A2FA4E9B500D1CA45 /* XCRemoteSwiftPackageReference "CodeEditor" */,
+				F7A9C82D2FA4E9F800D1CA45 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F7A9C81A2FA4E92700D1CA45 /* Products */;
 			projectDirPath = "";
@@ -254,10 +271,10 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YAQ48GV4VF;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -286,10 +303,10 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YAQ48GV4VF;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -331,6 +348,51 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F7A9C8272FA4E97900D1CA45 /* XCRemoteSwiftPackageReference "swift-markdown" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/swiftlang/swift-markdown.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.7.3;
+			};
+		};
+		F7A9C82A2FA4E9B500D1CA45 /* XCRemoteSwiftPackageReference "CodeEditor" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ZeeZide/CodeEditor.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.6;
+			};
+		};
+		F7A9C82D2FA4E9F800D1CA45 /* XCRemoteSwiftPackageReference "KeychainAccess" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kishikawakatsumi/KeychainAccess.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F7A9C8282FA4E97900D1CA45 /* Markdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F7A9C8272FA4E97900D1CA45 /* XCRemoteSwiftPackageReference "swift-markdown" */;
+			productName = Markdown;
+		};
+		F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F7A9C82A2FA4E9B500D1CA45 /* XCRemoteSwiftPackageReference "CodeEditor" */;
+			productName = CodeEditor;
+		};
+		F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F7A9C82D2FA4E9F800D1CA45 /* XCRemoteSwiftPackageReference "KeychainAccess" */;
+			productName = KeychainAccess;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F7A9C8112FA4E92700D1CA45 /* Project object */;
 }
