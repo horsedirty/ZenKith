@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import PDFKit
 
 /// 主内容布局：左侧笔记列表（可折叠） + 中央编辑/预览区 + 右侧可呼出 AI 抽屉
 struct ContentView: View {
@@ -14,12 +15,21 @@ struct ContentView: View {
     @State private var dragStartWidth: CGFloat = 0
     @State private var sidebarCollapsed = false
 
+    // LaTeX 编译状态
+    @State private var isCompiling = false
+    @State private var compilePass = (0, 0)
+    @State private var compileLog = ""
+    @State private var compilePDFData: Data?
+    @State private var showCompileLog = false
+
+    // 编译缓存：texURL → (PDF data, 源码hash)
+    @State private var compileCache: [URL: (data: Data, hash: Int)] = [:]
+
     // MARK: - Body
 
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                // 左侧侧边栏（可折叠）
                 if !sidebarCollapsed {
                     SidebarView(manager: manager, settings: settings)
                         .frame(width: min(280, geometry.size.width * 0.25))
@@ -29,10 +39,8 @@ struct ContentView: View {
                     Divider()
                 }
 
-                // 中央主内容区
                 mainContentArea
 
-                // 右侧 AI 抽屉
                 if showAIDrawer {
                     Divider()
                     AIDrawer(viewModel: aiViewModel)
@@ -54,12 +62,32 @@ struct ContentView: View {
         .onChange(of: manager.editingContent) {
             DispatchQueue.main.async { manager.scheduleAutoSave() }
         }
-        // 快捷键
+        .onChange(of: manager.selectedNote) { _, newNote in
+            if let note = newNote {
+                let ext = note.fileURL.pathExtension.lowercased()
+                if ext == "tex" || ext == "ltx" {
+                    settings.editorLanguage = .latex
+                    // 从缓存恢复编译结果
+                    if let cached = compileCache[note.fileURL] {
+                        compilePDFData = cached.data
+                        compileLog = ""
+                    } else {
+                        compilePDFData = nil
+                        compileLog = ""
+                    }
+                } else if ext == "md" {
+                    settings.editorLanguage = .markdown
+                    compilePDFData = nil
+                    compileLog = ""
+                }
+            }
+        }
         .background(Button("") { showAIDrawer.toggle() }
             .keyboardShortcut("i", modifiers: [.command, .shift]).opacity(0))
         .background(Button("") { cycleViewMode() }
             .keyboardShortcut("l", modifiers: [.command, .shift]).opacity(0))
-        // 通知
+        .background(Button("") { compileLatex() }
+            .keyboardShortcut("b", modifiers: [.command]).opacity(0))
         .onReceive(NotificationCenter.default.publisher(for: .toggleAIDrawer)) { _ in
             showAIDrawer.toggle()
         }
@@ -73,6 +101,21 @@ struct ContentView: View {
                 settings.defaultDirectoryURL = url
             }
         }
+        .sheet(isPresented: $showCompileLog) {
+            VStack(spacing: 12) {
+                Text("编译日志").font(.headline)
+                ScrollView {
+                    Text(compileLog.isEmpty ? "无输出" : compileLog)
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+                Button("关闭") { showCompileLog = false }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .frame(width: 600, height: 400)
+            .padding()
+        }
     }
 
     // MARK: - 折叠侧边栏
@@ -83,16 +126,13 @@ struct ContentView: View {
                 Image(systemName: "sidebar.left").font(.title3)
             }
             .buttonStyle(.borderless).help("展开侧边栏")
-
             Button(action: { showAIDrawer.toggle() }) {
                 Image(systemName: "sparkles").font(.title3)
             }
             .buttonStyle(.borderless).help("AI 助手")
-
             Spacer()
         }
-        .padding(.vertical, 8)
-        .frame(width: 40)
+        .padding(.vertical, 8).frame(width: 40)
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
@@ -112,10 +152,14 @@ struct ContentView: View {
 
     @ViewBuilder
     private var mainContentArea: some View {
-        switch settings.viewMode {
-        case .split:  splitView
-        case .editor: editorOnlyView
-        case .preview: previewPaneOnly
+        if let note = manager.selectedNote, !note.fileType.isEditable {
+            nonEditablePreview(note)
+        } else {
+            switch settings.viewMode {
+            case .split:  splitView
+            case .editor: editorOnlyView
+            case .preview: previewPaneOnly
+            }
         }
     }
 
@@ -128,15 +172,49 @@ struct ContentView: View {
     }
 
     private var editorOnlyView: some View { editorPane }
-
     private var previewPaneOnly: some View { previewPane }
+
+    // MARK: - 非可编辑文件预览（图片、PDF）
+
+    @ViewBuilder
+    private func nonEditablePreview(_ note: NoteFile) -> some View {
+        switch note.fileType {
+        case .image:
+            if let nsImage = NSImage(contentsOf: note.fileURL) {
+                Image(nsImage: nsImage)
+                    .resizable().aspectRatio(contentMode: .fit)
+                    .padding()
+            } else {
+                VStack { Image(systemName: "photo").font(.largeTitle); Text("无法加载图片") }
+            }
+        case .pdfDoc:
+            PDFKitView(url: note.fileURL)
+        default:
+            VStack {
+                Image(systemName: note.fileType.systemImage).font(.largeTitle)
+                Text("\(note.displayTitle)\n二进制文件，无法编辑")
+                    .multilineTextAlignment(.center).foregroundColor(.secondary)
+            }
+        }
+    }
 
     // MARK: - 编辑器
 
     private var editorPane: some View {
         VStack(spacing: 0) {
             if let note = manager.selectedNote {
-                EditorView(text: $manager.editingContent, fontSize: settings.fontSize).id(note.id)
+                if note.fileType.isEditable {
+                    EditorView(text: $manager.editingContent, fontSize: settings.fontSize, language: settings.editorLanguage).id(note.id)
+                } else {
+                    Color(nsColor: .controlBackgroundColor)
+                        .overlay {
+                            VStack(spacing: 12) {
+                                Image(systemName: note.fileType.systemImage).font(.system(size: 36)).foregroundColor(.secondary)
+                                Text("\(note.displayTitle)").font(.headline)
+                                Text("此文件类型不可编辑").foregroundColor(.secondary)
+                            }
+                        }
+                }
                 noteStatusBar(note)
             } else {
                 emptyStateView
@@ -149,12 +227,26 @@ struct ContentView: View {
     private var previewPane: some View {
         Group {
             if let note = manager.selectedNote {
-                PreviewWebView(
-                    rawMarkdown: manager.editingContent,
-                    baseURL: note.fileURL.deletingLastPathComponent(),
-                    fontSize: settings.fontSize,
-                    highlightText: selectedText
-                )
+                switch note.fileType {
+                case .latexSource:
+                    latexPreviewPane(note)
+                case .image:
+                    if let nsImage = NSImage(contentsOf: note.fileURL) {
+                        Image(nsImage: nsImage).resizable().aspectRatio(contentMode: .fit).padding()
+                    }
+                case .pdfDoc:
+                    PDFKitView(url: note.fileURL)
+                case .logAux:
+                    ScrollView { Text(manager.editingContent).font(.system(size: 11, design: .monospaced)).padding() }
+                        .background(Color(nsColor: .textBackgroundColor))
+                default:
+                    PreviewWebView(
+                        rawMarkdown: manager.editingContent,
+                        baseURL: note.fileURL.deletingLastPathComponent(),
+                        fontSize: settings.fontSize,
+                        highlightText: selectedText
+                    )
+                }
             } else {
                 Color(nsColor: .controlBackgroundColor)
                     .overlay {
@@ -167,73 +259,163 @@ struct ContentView: View {
         }
     }
 
-    private var emptyStateView: some View {
-        Color(nsColor: .controlBackgroundColor)
-            .overlay {
+    // MARK: - LaTeX 预览面板（编译结果）
+
+    private func latexPreviewPane(_ note: NoteFile) -> some View {
+        VStack(spacing: 0) {
+            if isCompiling {
                 VStack(spacing: 16) {
-                    Image(systemName: "doc.text").font(.system(size: 48)).foregroundColor(.secondary)
-                    Text("MarkFlow Note").font(.title2).foregroundColor(.secondary)
-                    Text("在左侧创建一个新笔记开始写作\nCmd+N 快速新建")
-                        .multilineTextAlignment(.center).foregroundColor(.secondary)
+                    ProgressView()
+                    Text("正在编译 (第 \(compilePass.0)/\(compilePass.1) 轮)...")
+                        .font(.caption).foregroundColor(.secondary)
+                    ProgressView(value: Double(compilePass.0), total: Double(compilePass.1))
+                        .frame(width: 200)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let pdfData = compilePDFData,
+                      let document = PDFDocument(data: pdfData) {
+                PDFKitView(document: document)
+            } else if LatexService.detectInstalledCompilers().isEmpty {
+                // 无本地编译器，使用 WebView + MathJax 回退渲染
+                LatexPreviewView(
+                    latexSource: manager.editingContent,
+                    fontSize: settings.fontSize,
+                    baseURL: note.fileURL.deletingLastPathComponent()
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "hammer").font(.system(size: 32)).foregroundColor(.secondary)
+                    Text("尚未编译").font(.headline).foregroundColor(.secondary)
+                    Text("Cmd+B 或点击工具栏编译按钮 (\(settings.latexCompiler.displayName))")
+                        .font(.caption).foregroundColor(.secondary)
+                    if !compileLog.isEmpty {
+                        Divider()
+                        ScrollView {
+                            Text(compileLog)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                        }
+                        .frame(maxHeight: 200)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    // MARK: - LaTeX 编译
+
+    private func compileLatex() {
+        guard let note = manager.selectedNote,
+              settings.editorLanguage == .latex,
+              !isCompiling else { return }
+        manager.saveImmediately()
+
+        let texURL = note.fileURL
+        let compiler = settings.latexCompiler
+        let sourceHash = manager.editingContent.hashValue
+        isCompiling = true
+        compilePass = (0, 3)
+        compileLog = ""
+
+        Task {
+            let result = await LatexService.compile(texURL: texURL, compiler: compiler) { pass, total in
+                Task { @MainActor in
+                    compilePass = (pass, total)
                 }
             }
-    }
-
-    private func noteStatusBar(_ note: NoteFile) -> some View {
-        HStack(spacing: 12) {
-            Button(action: { sidebarCollapsed.toggle() }) {
-                Image(systemName: sidebarCollapsed ? "sidebar.right" : "sidebar.left")
+            compilePDFData = result.pdfData
+            compileLog = result.log
+            isCompiling = false
+            compilePass = (0, 0)
+            if let pdfData = result.pdfData {
+                compileCache[texURL] = (data: pdfData, hash: sourceHash)
             }
-            .buttonStyle(.borderless).help(sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏")
-
-            Text(note.displayTitle).font(.caption).foregroundColor(.secondary).lineLimit(1)
-            Spacer()
-            Text("字数: \(manager.editingContent.count)").font(.caption).foregroundColor(.secondary)
-            Text(note.modifiedDate.formatted(date: .abbreviated, time: .shortened))
-                .font(.caption).foregroundColor(.secondary)
         }
-        .padding(.horizontal, 12).padding(.vertical, 4)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.8))
     }
 
-    // MARK: - 工具栏（紧凑版 + AI 按钮）
+    // MARK: - 工具栏
 
     private var toolbarContent: some View {
         HStack(spacing: 6) {
-            // 视图模式：3 个图标按钮
+            Picker("", selection: $settings.editorLanguage) {
+                ForEach(EditorLanguage.allCases, id: \.self) { lang in
+                    Text(lang.displayName).tag(lang)
+                }
+            }
+            .pickerStyle(.segmented).frame(width: 180)
+            .help("选择编写语言：Markdown 或 LaTeX")
+
+            if settings.editorLanguage == .latex {
+                // 编译器选择
+                Menu {
+                    ForEach(LatexCompiler.allCases, id: \.self) { c in
+                        Button(action: { settings.latexCompiler = c }) {
+                            HStack {
+                                Text(c.displayName)
+                                if settings.latexCompiler == c {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Text(settings.latexCompiler.displayName)
+                        .font(.caption)
+                }
+                .menuStyle(.borderlessButton).frame(width: 80)
+                .help("选择 LaTeX 编译器")
+
+                // 编译按钮
+                Button(action: { compileLatex() }) {
+                    Image(systemName: "hammer")
+                        .font(.body)
+                        .foregroundColor(isCompiling ? .orange : .accentColor)
+                }
+                .buttonStyle(.borderless).help("编译 LaTeX (Cmd+B)")
+                .disabled(isCompiling)
+
+                // 显示日志
+                if !compileLog.isEmpty {
+                    Button(action: { showCompileLog = true }) {
+                        Image(systemName: compilePDFData != nil ? "checkmark.circle" : "exclamationmark.triangle")
+                            .font(.body)
+                            .foregroundColor(compilePDFData != nil ? .green : .orange)
+                    }
+                    .buttonStyle(.borderless).help("查看编译日志")
+                }
+            }
+
+            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
+
             ForEach(ViewMode.allCases, id: \.self) { mode in
                 Button(action: { settings.viewMode = mode }) {
                     Image(systemName: mode.systemImage)
                         .font(.body)
                         .foregroundColor(settings.viewMode == mode ? .accentColor : .secondary)
                 }
-                .buttonStyle(.borderless)
-                .help(mode.displayName)
+                .buttonStyle(.borderless).help(mode.displayName)
             }
 
             Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
 
-            // 字号
             Text("\(Int(settings.fontSize))")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(width: 18)
+                .font(.caption).foregroundColor(.secondary).frame(width: 18)
                 .help("Cmd+滚轮 调节字号")
 
             Spacer()
 
-            // AI 按钮
             Button(action: { showAIDrawer.toggle() }) {
                 Image(systemName: "sparkles")
                     .font(.body)
                     .foregroundColor(showAIDrawer ? .accentColor : .secondary)
             }
-            .buttonStyle(.borderless)
-            .help("AI 助手 (Cmd+Shift+I)")
+            .buttonStyle(.borderless).help("AI 助手 (Cmd+Shift+I)")
 
             Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
 
-            // 导出
             Menu {
                 ForEach(ExportService.ExportFormat.allCases, id: \.self) { format in
                     Button(action: { exportNote(format: format) }) {
@@ -255,6 +437,44 @@ struct ContentView: View {
         case .txt: "doc.plaintext"
         case .markdown: "arrow.down.doc"
         }
+    }
+
+    // MARK: - 状态栏
+
+    private var emptyStateView: some View {
+        Color(nsColor: .controlBackgroundColor)
+            .overlay {
+                VStack(spacing: 16) {
+                    Image(systemName: "doc.text").font(.system(size: 48)).foregroundColor(.secondary)
+                    Text("ZenKith").font(.title2).foregroundColor(.secondary)
+                    Text("在左侧创建一个新笔记开始写作\nCmd+N 快速新建")
+                        .multilineTextAlignment(.center).foregroundColor(.secondary)
+                }
+            }
+    }
+
+    private func noteStatusBar(_ note: NoteFile) -> some View {
+        HStack(spacing: 12) {
+            Button(action: { sidebarCollapsed.toggle() }) {
+                Image(systemName: sidebarCollapsed ? "sidebar.right" : "sidebar.left")
+            }
+            .buttonStyle(.borderless).help(sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏")
+
+            Image(systemName: note.fileType.systemImage)
+                .font(.caption2).foregroundColor(.secondary)
+
+            Text(note.displayTitle).font(.caption).foregroundColor(.secondary).lineLimit(1)
+
+            Spacer()
+
+            if note.fileType.isEditable {
+                Text("字数: \(manager.editingContent.count)").font(.caption).foregroundColor(.secondary)
+            }
+            Text(note.modifiedDate.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption).foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 4)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.8))
     }
 
     // MARK: - Cmd+滚轮字号
@@ -281,11 +501,12 @@ struct ContentView: View {
     private func exportNote(format: ExportService.ExportFormat) {
         guard let note = manager.selectedNote else { return }
         manager.saveImmediately()
-        let ctx = ExportService.ExportContext(
+        var ctx = ExportService.ExportContext(
             markdownContent: manager.editingContent,
             fileURL: note.fileURL,
             baseURL: note.fileURL.deletingLastPathComponent()
         )
+        ctx.editorLanguage = settings.editorLanguage
         Task { await ExportService.export(ctx, format: format) }
     }
 
@@ -293,5 +514,28 @@ struct ContentView: View {
         let all = ViewMode.allCases
         guard let idx = all.firstIndex(of: settings.viewMode) else { return }
         settings.viewMode = all[(idx + 1) % all.count]
+    }
+}
+
+// MARK: - PDFView 封装
+
+struct PDFKitView: NSViewRepresentable {
+    var url: URL?
+    var document: PDFDocument?
+
+    func makeNSView(context: Context) -> PDFView {
+        let pdfView = PDFView()
+        pdfView.autoScales = true
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.displayDirection = .vertical
+        return pdfView
+    }
+
+    func updateNSView(_ pdfView: PDFView, context: Context) {
+        if let doc = document {
+            pdfView.document = doc
+        } else if let url, let doc = PDFDocument(url: url) {
+            pdfView.document = doc
+        }
     }
 }

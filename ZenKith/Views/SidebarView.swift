@@ -66,7 +66,7 @@ struct SidebarView: View {
                 onCancel: { showNewNoteSheet = false },
                 onConfirm: {
                     let name = newNoteName.isEmpty ? "未命名笔记" : newNoteName
-                    manager.createNote(named: name)
+                    manager.createNote(named: name, language: settings.editorLanguage)
                     newNoteName = ""
                     showNewNoteSheet = false
                 }
@@ -101,7 +101,7 @@ struct SidebarView: View {
                 renameText = ""
             }
         } message: {
-            Text("输入笔记的新名称（不含 .md 后缀）")
+            Text("输入笔记的新名称（不含后缀）")
         }
     }
 
@@ -184,8 +184,8 @@ struct SidebarView: View {
             Text(note.displayTitle)
                 .lineLimit(1)
         } icon: {
-            Image(systemName: "doc.text")
-                .foregroundColor(.accentColor)
+            Image(systemName: note.fileType.systemImage)
+                .foregroundColor(iconColor(for: note.fileType))
         }
         .contextMenu {
             Button("重命名") {
@@ -198,6 +198,19 @@ struct SidebarView: View {
             }
         }
         .tag(note.id)
+    }
+
+    private func iconColor(for type: NoteFileType) -> Color {
+        switch type {
+        case .markdown:    return .accentColor
+        case .latexSource: return .blue
+        case .bibTeX:      return .orange
+        case .styleClass:  return .purple
+        case .image:       return .green
+        case .pdfDoc:      return .red
+        case .logAux:      return .gray
+        case .other:       return .secondary
+        }
     }
 
     // MARK: - 输入弹窗

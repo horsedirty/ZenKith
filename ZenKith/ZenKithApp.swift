@@ -42,7 +42,7 @@ struct ZenKithApp: App {
         // 文件菜单：新建笔记、新建文件夹、切换目录
         CommandGroup(after: .newItem) {
             Button("新建笔记") {
-                manager.createNote()
+                manager.createNote(language: settings.editorLanguage)
             }
             .keyboardShortcut("n", modifiers: [.command])
 

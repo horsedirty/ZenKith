@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 
-/// 笔记文件管理核心 —— 管理 .md 文件的读写、文件夹、自动保存
+/// 笔记文件管理核心 —— 管理所有支持的文件类型的读写、文件夹、自动保存
 @MainActor
 final class NotesManager: ObservableObject {
 
@@ -110,7 +110,7 @@ final class NotesManager: ObservableObject {
 
             if isDirectory {
                 folderURLs.append(url)
-            } else if url.pathExtension.lowercased() == "md" {
+            } else if NoteFileType.supportedExtensions.contains(url.pathExtension.lowercased()) {
                 let modDate = resourceValues.contentModificationDate ?? Date()
                 let note = NoteFile(
                     title: url.lastPathComponent,
@@ -128,9 +128,10 @@ final class NotesManager: ObservableObject {
     // MARK: - 文件操作
 
     /// 新建笔记
-    func createNote(named name: String = "未命名笔记") {
+    func createNote(named name: String = "未命名笔记", language: EditorLanguage = .markdown) {
         let sanitized = sanitizeFileName(name)
-        let finalName = sanitized.hasSuffix(".md") ? sanitized : sanitized + ".md"
+        let ext = (language == .latex) ? ".tex" : ".md"
+        let finalName = sanitized.hasSuffix(ext) ? sanitized : sanitized + ext
         let fileURL = currentDirectory.appendingPathComponent(finalName)
 
         // 避免重名
@@ -138,12 +139,31 @@ final class NotesManager: ObservableObject {
         var resolvedURL = fileURL
         let fm = FileManager.default
         while fm.fileExists(atPath: resolvedURL.path) {
-            let base = sanitized.replacingOccurrences(of: ".md", with: "")
-            resolvedURL = currentDirectory.appendingPathComponent("\(base) \(counter).md")
+            let base = sanitized.replacingOccurrences(of: ext, with: "")
+            resolvedURL = currentDirectory.appendingPathComponent("\(base) \(counter)\(ext)")
             counter += 1
         }
 
-        let initialContent = "# \(sanitized.replacingOccurrences(of: ".md", with: ""))\n\n"
+        let initialContent: String
+        if language == .latex {
+            initialContent = """
+            \\documentclass{article}
+            \\usepackage[UTF8]{ctex}
+            \\usepackage{amsmath,amssymb}
+            \\usepackage{geometry}
+            \\geometry{a4paper, margin=2cm}
+            \\begin{document}
+
+            \\title{\(sanitized.replacingOccurrences(of: ext, with: ""))}
+            \\author{}
+            \\date{\\today}
+            \\maketitle
+
+            \\end{document}
+            """
+        } else {
+            initialContent = "# \(sanitized.replacingOccurrences(of: ext, with: ""))\n\n"
+        }
         try? initialContent.write(to: resolvedURL, atomically: true, encoding: .utf8)
 
         refreshFileList()
@@ -167,6 +187,11 @@ final class NotesManager: ObservableObject {
     private func loadContent(for note: NoteFile) {
         if let cached = contentCache[note.fileURL] {
             editingContent = cached
+            return
+        }
+        // 非可编辑文件不加载文本内容（如图片、PDF）
+        guard note.fileType.isEditable else {
+            editingContent = ""
             return
         }
         do {
@@ -216,7 +241,8 @@ final class NotesManager: ObservableObject {
     /// 重命名笔记
     func renameNote(_ note: NoteFile, to newName: String) {
         let sanitized = sanitizeFileName(newName)
-        let finalName = sanitized.hasSuffix(".md") ? sanitized : sanitized + ".md"
+        let ext = "." + note.fileURL.pathExtension.lowercased()
+        let finalName = sanitized.hasSuffix(ext) ? sanitized : sanitized + ext
         let newURL = note.fileURL.deletingLastPathComponent().appendingPathComponent(finalName)
 
         guard !FileManager.default.fileExists(atPath: newURL.path) else { return }

@@ -11,6 +11,7 @@ final class ExportService {
         let markdownContent: String
         let fileURL: URL
         let baseURL: URL
+        var editorLanguage: EditorLanguage = .markdown
     }
 
     enum ExportFormat: String, CaseIterable {
@@ -52,12 +53,41 @@ final class ExportService {
 
         do {
             switch format {
-            case .pdf: try await exportPDF(context, to: destinationURL)
+            case .pdf:
+                if context.editorLanguage == .latex {
+                    try await exportLatexPDF(context, to: destinationURL)
+                } else {
+                    try await exportPDF(context, to: destinationURL)
+                }
             case .docx: try await exportDocx(context, to: destinationURL)
             case .txt: try exportTXT(context, to: destinationURL)
             case .markdown: try exportMarkdown(context, to: destinationURL)
             }
         } catch {}
+    }
+
+    // MARK: - LaTeX PDF 导出（调用本地编译器或 WebView 回退）
+
+    private static func exportLatexPDF(_ context: ExportContext, to url: URL) async throws {
+        // 优先使用本地 LaTeX 编译器
+        if let pdfData = await LatexService.compileToPDF(context.markdownContent) {
+            try pdfData.write(to: url)
+            return
+        }
+        // 回退：使用 WebView + MathJax 渲染为 PDF
+        let html = LatexService.latexToHTML(context.markdownContent, fontSize: 16)
+        let embeddedHTML = embedImagesAsBase64(in: html, baseURL: context.baseURL)
+
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 595, height: 842))
+
+        let data: Data = try await withCheckedThrowingContinuation { continuation in
+            let delegate = PDFExportDelegate(webView: webView, html: embeddedHTML, baseURL: context.baseURL) { result in
+                continuation.resume(with: result)
+            }
+            objc_setAssociatedObject(webView, "delegateRef", delegate, .OBJC_ASSOCIATION_RETAIN)
+        }
+
+        try data.write(to: url)
     }
 
     // MARK: - PDF 导出
