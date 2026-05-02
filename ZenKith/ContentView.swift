@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import AppKit
 import PDFKit
+import CodeEditor
 
 /// 主内容布局：左侧笔记列表（可折叠） + 中央编辑/预览区 + 右侧可呼出 AI 抽屉
 struct ContentView: View {
@@ -24,6 +25,10 @@ struct ContentView: View {
 
     // 编译缓存：texURL → (PDF data, 源码hash)
     @State private var compileCache: [URL: (data: Data, hash: Int)] = [:]
+
+    // PDFDocument 对象缓存，避免在流式渲染时重复创建
+    @State private var cachedPDFDocument: PDFDocument?
+    @State private var cachedPDFSourceURL: URL?
 
     // MARK: - Body
 
@@ -70,14 +75,22 @@ struct ContentView: View {
                     // 从缓存恢复编译结果
                     if let cached = compileCache[note.fileURL] {
                         compilePDFData = cached.data
+                        if cachedPDFSourceURL != note.fileURL {
+                            cachedPDFDocument = PDFDocument(data: cached.data)
+                            cachedPDFSourceURL = note.fileURL
+                        }
                         compileLog = ""
                     } else {
                         compilePDFData = nil
+                        cachedPDFDocument = nil
+                        cachedPDFSourceURL = nil
                         compileLog = ""
                     }
                 } else if ext == "md" {
                     settings.editorLanguage = .markdown
                     compilePDFData = nil
+                    cachedPDFDocument = nil
+                    cachedPDFSourceURL = nil
                     compileLog = ""
                 }
             }
@@ -223,11 +236,31 @@ struct ContentView: View {
 
     // MARK: - 编辑器
 
+    private var codeEditorLanguage: CodeEditor.Language {
+        switch settings.editorLanguage {
+        case .markdown: return .markdown
+        case .latex:    return .tex
+        }
+    }
+
+    private var codeEditorFontSize: Binding<CGFloat> {
+        Binding<CGFloat>(
+            get: { CGFloat(settings.fontSize) },
+            set: { settings.fontSize = Double($0) }
+        )
+    }
+
     private var editorPane: some View {
         VStack(spacing: 0) {
             if let note = manager.selectedNote {
                 if note.fileType.isEditable {
-                    EditorView(text: $manager.editingContent, fontSize: settings.fontSize, language: settings.editorLanguage).id(note.id)
+                    CodeEditor(
+                        source: $manager.editingContent,
+                        language: codeEditorLanguage,
+                        theme: .pojoaque,
+                        fontSize: codeEditorFontSize
+                    )
+                    .id(note.id)
                 } else {
                     Color(nsColor: .controlBackgroundColor)
                         .overlay {
@@ -295,8 +328,7 @@ struct ContentView: View {
                         .frame(width: 200)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let pdfData = compilePDFData,
-                      let document = PDFDocument(data: pdfData) {
+            } else if let document = cachedPDFDocument {
                 PDFKitView(document: document)
             } else if LatexService.detectInstalledCompilers().isEmpty {
                 // 无本地编译器，使用 WebView + MathJax 回退渲染
@@ -355,6 +387,8 @@ struct ContentView: View {
             compilePass = (0, 0)
             if let pdfData = result.pdfData {
                 compileCache[texURL] = (data: pdfData, hash: sourceHash)
+                cachedPDFDocument = PDFDocument(data: pdfData)
+                cachedPDFSourceURL = texURL
             }
         }
     }

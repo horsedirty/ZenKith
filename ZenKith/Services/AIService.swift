@@ -8,28 +8,66 @@ final class AIService {
 
     // MARK: - 消息模型
 
-    struct ChatMessage: Identifiable {
-        let id = UUID()
+    struct ChatMessage: Identifiable, Codable {
+        let id: UUID
         let role: Role
         let content: String
         let reasoningContent: String?
         let timestamp: Date
+        let attachments: [Attachment]?
+        var searchResults: [SearchResultItem]?
 
-        init(role: Role, content: String, reasoningContent: String? = nil, timestamp: Date = Date()) {
+        init(role: Role, content: String, reasoningContent: String? = nil,
+             timestamp: Date = Date(), attachments: [Attachment]? = nil,
+             searchResults: [SearchResultItem]? = nil) {
+            self.id = UUID()
             self.role = role
             self.content = content
             self.reasoningContent = reasoningContent
             self.timestamp = timestamp
+            self.attachments = attachments
+            self.searchResults = searchResults
         }
 
-        enum Role: String {
+        struct SearchResultItem: Identifiable, Codable {
+            public var id: Int
+            public let title: String
+            public let url: String
+        }
+
+        enum Role: String, Codable {
             case system, user, assistant
+        }
+
+        struct Attachment: Identifiable, Codable {
+            let id: UUID
+            let fileName: String
+            let fileExtension: String
+            let data: Data
+            let mimeType: String
+
+            var displayName: String { "\(fileName).\(fileExtension)" }
+
+            init(id: UUID = UUID(), fileName: String, fileExtension: String,
+                 data: Data, mimeType: String) {
+                self.id = id
+                self.fileName = fileName
+                self.fileExtension = fileExtension
+                self.data = data
+                self.mimeType = mimeType
+            }
         }
     }
 
     // MARK: - Keychain 管理
 
     private let keychain = Keychain(service: PersistenceKeys.keychainService).synchronizable(false)
+    private var currentTask: URLSessionDataTask?
+
+    func cancelStream() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
 
     func getAPIKey(forIdentifier identifier: String) -> String? {
         try? keychain.getString(identifier)
@@ -95,6 +133,7 @@ final class AIService {
         // delegate 强引用保存在 session 上，session 结束前不会释放
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
         let task = session.dataTask(with: request)
+        currentTask = task
         objc_setAssociatedObject(task, "sseDelegate", delegate, .OBJC_ASSOCIATION_RETAIN)
         task.resume()
     }
@@ -116,6 +155,7 @@ private final class SSEDelegate: NSObject, URLSessionDataDelegate {
     private var isErrorResponse = false
     private var isCompleted = false
     private var httpErrorBody = ""
+    private var httpErrorStatusCode = 0
 
     // 节流：DispatchWorkItem 方式，可靠触发于主队列
     private var pendingReasoningChunk = ""
@@ -152,6 +192,7 @@ private final class SSEDelegate: NSObject, URLSessionDataDelegate {
         guard (200...299).contains(httpResponse.statusCode) else {
             // 非 200：标记错误，收集 body
             isErrorResponse = true
+            httpErrorStatusCode = httpResponse.statusCode
             httpErrorBody = ""
             completionHandler(.allow)
             return
@@ -174,6 +215,24 @@ private final class SSEDelegate: NSObject, URLSessionDataDelegate {
         }
 
         if isErrorResponse {
+            // 非 200 响应：读取原始 buffer（API 返回 JSON 而非 SSE）
+            let rawBody = buffer.isEmpty ? httpErrorBody : buffer
+            let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            let statusMsg: String
+            if !body.isEmpty {
+                // 尝试从 JSON 中提取 error.message
+                if let data = body.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorObj = json["error"] as? [String: Any],
+                   let msg = errorObj["message"] as? String {
+                    statusMsg = "HTTP \(httpErrorStatusCode): \(msg)"
+                } else {
+                    statusMsg = "HTTP \(httpErrorStatusCode): \(String(body.prefix(300)))"
+                }
+            } else {
+                statusMsg = "HTTP \(httpErrorStatusCode): 请求被服务器拒绝"
+            }
+            Task { @MainActor in onError(AIError.httpError(httpErrorStatusCode, statusMsg)) }
             session.invalidateAndCancel()
             return
         }

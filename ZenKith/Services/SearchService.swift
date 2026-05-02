@@ -1,121 +1,123 @@
 import Foundation
 
-/// 联网搜索服务，支持 SerpAPI 和 Bing Search
+/// 免费联网搜索服务：DuckDuckGo Instant Answer API + HTML 回退，无需 API Key
 @MainActor
 final class SearchService {
 
-    /// 搜索结果
     struct SearchResult: Identifiable {
-        let id = UUID()
-        let title: String
-        let snippet: String
-        let url: String
+        public var id: String { url.absoluteString }
+        public let title: String
+        public let snippet: String
+        public let url: URL
     }
 
     // MARK: - 搜索接口
 
-    /// 执行联网搜索，获取 top 3 结果摘要
-    /// - Parameters:
-    ///   - query: 搜索关键词
-    ///   - config: AI 配置（含搜索提供商和 API Key 标识）
-    ///   - keyProvider: Keychain Key 读取闭包
-    /// - Returns: 搜索摘要文本，可直接作为 AI 对话上下文
-    func search(
-        query: String,
-        config: AIConfig,
-        apiKey: String?
-    ) async throws -> String {
-        guard let key = apiKey, !key.isEmpty else {
-            throw SearchError.noAPIKey
-        }
-
-        switch config.searchProvider {
-        case .serpapi:
-            let results = try await searchSerpAPI(query: query, apiKey: key)
-            return formatResults(results, query: query)
-        case .bing:
-            let results = try await searchBing(query: query, apiKey: key)
-            return formatResults(results, query: query)
-        }
+    func search(query: String) async throws -> (text: String, results: [SearchResult]) {
+        let results = await performSearch(query: query)
+        let text = formatResults(results, query: query)
+        return (text, results)
     }
 
-    // MARK: - SerpAPI
+    // MARK: - 两阶段搜索
 
-    private func searchSerpAPI(query: String, apiKey: String) async throws -> [SearchResult] {
-        var components = URLComponents(string: "https://serpapi.com/search")!
-        components.queryItems = [
-            URLQueryItem(name: "q", value: query),
-            URLQueryItem(name: "api_key", value: apiKey),
-            URLQueryItem(name: "engine", value: "google"),
-            URLQueryItem(name: "num", value: "3"),
-            URLQueryItem(name: "hl", value: "zh-CN")
-        ]
-
-        guard let url = components.url else {
-            throw SearchError.invalidURL
-        }
-
-        let (data, response) = try await URLSession.shared.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw SearchError.httpError
-        }
-
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let organic = json?["organic_results"] as? [[String: Any]] ?? []
-
-        return organic.prefix(3).compactMap { item in
-            guard let title = item["title"] as? String,
-                  let snippet = item["snippet"] as? String,
-                  let link = item["link"] as? String else {
-                return nil
-            }
-            return SearchResult(title: title, snippet: snippet, url: link)
-        }
+    private func performSearch(query: String) async -> [SearchResult] {
+        let apiResults = await searchInstantAnswer(query: query)
+        if !apiResults.isEmpty { return apiResults }
+        return await searchHTML(query: query)
     }
 
-    // MARK: - Bing Search
+    // MARK: - DuckDuckGo Instant Answer API
 
-    private func searchBing(query: String, apiKey: String) async throws -> [SearchResult] {
-        var components = URLComponents(string: "https://api.bing.microsoft.com/v7.0/search")!
-        components.queryItems = [
-            URLQueryItem(name: "q", value: query),
-            URLQueryItem(name: "count", value: "3"),
-            URLQueryItem(name: "mkt", value: "zh-CN")
-        ]
-
-        guard let url = components.url else {
-            throw SearchError.invalidURL
+    private func searchInstantAnswer(query: String) async -> [SearchResult] {
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://api.duckduckgo.com/?q=\(encoded)&format=json&no_html=1&no_redirect=1&t=ZenKith") else {
+            return []
         }
 
-        var request = URLRequest(url: url)
-        request.setValue(apiKey, forHTTPHeaderField: "Ocp-Apim-Subscription-Key")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw SearchError.httpError
+        guard let (data, _) = try? await directSession.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
         }
 
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let pages = json?["webPages"] as? [String: Any]
-        let values = pages?["value"] as? [[String: Any]] ?? []
+        var results: [SearchResult] = []
 
-        return values.prefix(3).compactMap { item in
-            guard let title = item["name"] as? String,
-                  let snippet = item["snippet"] as? String,
-                  let link = item["url"] as? String else {
-                return nil
+        // 主摘要
+        if let abstract = json["Abstract"] as? String, !abstract.isEmpty,
+           let absURLStr = json["AbstractURL"] as? String,
+           let absURL = URL(string: absURLStr) {
+            let title = (json["Heading"] as? String) ?? query
+            results.append(SearchResult(title: title, snippet: String(abstract.prefix(400)), url: absURL))
+        }
+
+        // 相关话题
+        if let topics = json["RelatedTopics"] as? [[String: Any]] {
+            for topic in topics.prefix(5) {
+                if let text = topic["Text"] as? String, !text.isEmpty,
+                   let firstURLStr = topic["FirstURL"] as? String,
+                   let firstURL = URL(string: firstURLStr) {
+                    let parts = text.components(separatedBy: " - ")
+                    let title = parts.first ?? "相关结果"
+                    let snippet = parts.count > 1 ? parts.dropFirst().joined(separator: " - ") : text
+                    results.append(SearchResult(title: title, snippet: String(snippet.prefix(400)), url: firstURL))
+                }
             }
-            return SearchResult(title: title, snippet: snippet, url: link)
         }
+
+        return Array(results.prefix(6))
+    }
+
+    // MARK: - DuckDuckGo HTML 回退
+
+    private func searchHTML(query: String) async -> [SearchResult] {
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://html.duckduckgo.com/html/?q=\(encoded)") else {
+            return []
+        }
+
+        guard let (data, _) = try? await directSession.data(from: url),
+              let html = String(data: data, encoding: .utf8) else {
+            return []
+        }
+
+        var results: [SearchResult] = []
+
+        // 正则提取标题、链接和摘要
+        let linkPattern = #"class="result__a"[^>]*href="([^"]*)"[^>]*>([^<]*)</a>"#
+        let snippetPattern = #"class="result__snippet"[^>]*>([^<]*)</"#
+
+        guard let linkRegex = try? NSRegularExpression(pattern: linkPattern),
+              let snippetRegex = try? NSRegularExpression(pattern: snippetPattern) else {
+            return []
+        }
+
+        let links = linkRegex.matches(in: html, range: NSRange(html.startIndex..., in: html))
+        let snippets = snippetRegex.matches(in: html, range: NSRange(html.startIndex..., in: html))
+
+        for i in 0..<min(links.count, snippets.count, 6) {
+            let linkMatch = links[i]
+            let snippetMatch = snippets[i]
+
+            guard let linkRange = Range(linkMatch.range(at: 1), in: html),
+                  let titleRange = Range(linkMatch.range(at: 2), in: html),
+                  let snippetRange = Range(snippetMatch.range(at: 1), in: html),
+                  let url = URL(string: String(html[linkRange]).unescapedHTML()) else {
+                continue
+            }
+
+            let title = String(html[titleRange]).unescapedHTML().trimmingCharacters(in: .whitespacesAndNewlines)
+            let snippet = String(html[snippetRange]).unescapedHTML().trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if !title.isEmpty || !snippet.isEmpty {
+                results.append(SearchResult(title: title, snippet: String(snippet.prefix(400)), url: url))
+            }
+        }
+
+        return results
     }
 
     // MARK: - 格式化
 
-    /// 将搜索结果格式化为可嵌入 AI 对话的上下文文本
     private func formatResults(_ results: [SearchResult], query: String) -> String {
         guard !results.isEmpty else {
             return "搜索结果：未找到与「\(query)」相关的内容。"
@@ -123,30 +125,36 @@ final class SearchService {
 
         var output = "以下是「\(query)」的搜索结果摘要：\n\n"
         for (index, result) in results.enumerated() {
+            let snippet = result.snippet.count > 300
+                ? String(result.snippet.prefix(300)) + "…"
+                : result.snippet
             output += "\(index + 1). **\(result.title)**\n"
-            output += "   \(result.snippet)\n"
-            output += "   来源：\(result.url)\n\n"
+            output += "   \(snippet)\n"
+            output += "   来源：\(result.url.absoluteString)\n\n"
         }
-        output += "请基于以上搜索结果回答用户问题，并在回答中引用相关来源。"
+        output += "请基于以上搜索结果简要回答用户问题。"
         return output
     }
+
+    // MARK: - URLSession (直连，不走代理)
+
+    private let directSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.connectionProxyDictionary = [:]
+        config.timeoutIntervalForRequest = 15
+        return URLSession(configuration: config)
+    }()
 }
 
-// MARK: - 搜索错误
+// MARK: - HTML 实体解码
 
-enum SearchError: LocalizedError {
-    case noAPIKey
-    case invalidURL
-    case httpError
-
-    var errorDescription: String? {
-        switch self {
-        case .noAPIKey:
-            return "未配置搜索 API 密钥"
-        case .invalidURL:
-            return "无效的搜索 API 地址"
-        case .httpError:
-            return "搜索服务请求失败"
-        }
+private extension String {
+    func unescapedHTML() -> String {
+        self.replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&#x27;", with: "'")
     }
 }

@@ -10,6 +10,7 @@
 		F7A9C8292FA4E97900D1CA45 /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C8282FA4E97900D1CA45 /* Markdown */; };
 		F7A9C82C2FA4E9B500D1CA45 /* CodeEditor in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */; };
 		F7A9C82F2FA4E9F800D1CA45 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */; };
+		F7A9C8312FA4F0000D1CA45 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C8302FA4F0000D1CA45 /* Textual */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 				F7A9C82C2FA4E9B500D1CA45 /* CodeEditor in Frameworks */,
 				F7A9C8292FA4E97900D1CA45 /* Markdown in Frameworks */,
 				F7A9C82F2FA4E9F800D1CA45 /* KeychainAccess in Frameworks */,
+				F7A9C8312FA4F0000D1CA45 /* Textual in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +79,7 @@
 				F7A9C8282FA4E97900D1CA45 /* Markdown */,
 				F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */,
 				F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */,
+				F7A9C8302FA4F0000D1CA45 /* Textual */,
 			);
 			productName = ZenKith;
 			productReference = F7A9C8192FA4E92700D1CA45 /* ZenKith.app */;
@@ -110,6 +113,7 @@
 				F7A9C8272FA4E97900D1CA45 /* XCRemoteSwiftPackageReference "swift-markdown" */,
 				F7A9C82A2FA4E9B500D1CA45 /* XCRemoteSwiftPackageReference "CodeEditor" */,
 				F7A9C82D2FA4E9F800D1CA45 /* XCRemoteSwiftPackageReference "KeychainAccess" */,
+				F7A9C82F2FA4F0000D1CA45 /* XCRemoteSwiftPackageReference "Textual" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F7A9C81A2FA4E92700D1CA45 /* Products */;
@@ -374,6 +378,14 @@
 				kind = branch;
 			};
 		};
+		F7A9C82F2FA4F0000D1CA45 /* XCRemoteSwiftPackageReference "Textual" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/Textual";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -391,6 +403,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F7A9C82D2FA4E9F800D1CA45 /* XCRemoteSwiftPackageReference "KeychainAccess" */;
 			productName = KeychainAccess;
+		};
+		F7A9C8302FA4F0000D1CA45 /* Textual */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F7A9C82F2FA4F0000D1CA45 /* XCRemoteSwiftPackageReference "Textual" */;
+			productName = Textual;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
