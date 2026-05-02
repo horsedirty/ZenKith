@@ -73,6 +73,9 @@ struct EditorView: NSViewRepresentable {
 
         context.coordinator.wireCompletionEngine()
 
+        // 连接语法高亮
+        context.coordinator.setupHighlighting(for: textView)
+
         return scrollView
     }
 
@@ -84,6 +87,9 @@ struct EditorView: NSViewRepresentable {
             tv.textStorage?.setAttributedString(NSAttributedString(string: text))
             tv.undoManager?.removeAllActions()
             context.coordinator.isProgrammaticChange = false
+
+            // 外部文本变更后重新全量高亮
+            context.coordinator.applyFullHighlightIfNeeded(to: tv)
         }
 
         let font = NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular)
@@ -108,6 +114,9 @@ struct EditorView: NSViewRepresentable {
                 : NSColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
         }
 
+        // 语言切换或外观变化时更新高亮器
+        context.coordinator.updateHighlighterIfNeeded(language: language, dark: dark, tv: tv, fontSize: fontSize)
+
         context.coordinator.language = language
     }
 
@@ -124,9 +133,78 @@ struct EditorView: NSViewRepresentable {
         let completionEngine = LatexCompletionEngine()
         fileprivate var completionPopover: CompletionPopover?
 
+        // 语法高亮
+        private let syntaxHighlighter = LatexSyntaxHighlighter()
+        private var highlightingDelegate: LatexHighlightingDelegate?
+        private var lastHighlightedDark: Bool?
+
         init(text: Binding<String>, language: EditorLanguage) {
             self._text = text
             self.language = language
+        }
+
+        // MARK: - Syntax Highlighting Setup
+
+        func setupHighlighting(for textView: NSTextView) {
+            let delegate = LatexHighlightingDelegate(highlighter: syntaxHighlighter)
+            self.highlightingDelegate = delegate
+
+            // 只在 LaTeX 模式下激活
+            if language == .latex {
+                textView.textStorage?.delegate = delegate
+                if let ts = textView.textStorage {
+                    syntaxHighlighter.highlight(ts)
+                }
+            }
+        }
+
+        func applyFullHighlightIfNeeded(to textView: NSTextView) {
+            guard language == .latex, let ts = textView.textStorage else { return }
+            syntaxHighlighter.highlight(ts)
+        }
+
+        func updateHighlighterIfNeeded(language: EditorLanguage, dark: Bool, tv: NSTextView, fontSize: Double) {
+            let themeChanged = (lastHighlightedDark != dark)
+            let languageChanged = (self.language != language)
+
+            if languageChanged || themeChanged {
+                lastHighlightedDark = dark
+
+                // 更新主题
+                syntaxHighlighter.theme = dark ? .dark : .light
+                // 同步字体大小
+                syntaxHighlighter.theme.defaultFont = .monospacedSystemFont(
+                    ofSize: max(12, min(32, fontSize)), weight: .regular
+                )
+
+                if language == .latex {
+                    // 激活高亮 delegate
+                    if tv.textStorage?.delegate !== highlightingDelegate {
+                        tv.textStorage?.delegate = highlightingDelegate
+                    }
+                    // 全量重新高亮
+                    if let ts = tv.textStorage {
+                        syntaxHighlighter.highlight(ts)
+                    }
+                } else {
+                    // 非 LaTeX 模式，移除高亮 delegate 并恢复默认样式
+                    if tv.textStorage?.delegate === highlightingDelegate {
+                        tv.textStorage?.delegate = nil
+                    }
+                    if let ts = tv.textStorage {
+                        let fullRange = NSRange(location: 0, length: ts.length)
+                        let defaultAttrs: [NSAttributedString.Key: Any] = [
+                            .font: NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular),
+                            .foregroundColor: dark
+                                ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
+                                : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+                        ]
+                        ts.beginEditing()
+                        ts.setAttributes(defaultAttrs, range: fullRange)
+                        ts.endEditing()
+                    }
+                }
+            }
         }
 
         /// Wire engine callback so popover shows/hides at the right time (after async filter completes).
@@ -236,22 +314,17 @@ struct EditorView: NSViewRepresentable {
         private func cursorAnchorRect(in textView: NSTextView, atCharIndex charIndex: Int) -> NSRect {
             let range = NSRange(location: charIndex, length: 0)
             
-            // 使用 Cocoa 系统自带的获取字符屏幕位置的方法，这会自动处理 TextKit 2 和滚动偏移
             var rect = textView.firstRect(forCharacterRange: range, actualRange: nil)
             
             if rect.origin.x == .infinity || rect.width < 0 {
-                // 兜底方案：如果上述方法失败（如空行），计算行高
                 let font = textView.font ?? NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-                let lineHeight = font.pointSize * 1.2
                 
-                // 获取当前光标所在的行大致位置
                 let layout = textView.layoutManager
                 let container = textView.textContainer
                 if let layout = layout, let container = container {
                     let glyphIdx = layout.glyphIndexForCharacter(at: max(0, charIndex - 1))
                     let lineRect = layout.lineFragmentRect(forGlyphAt: glyphIdx, effectiveRange: nil)
                     rect = NSRect(x: lineRect.minX, y: lineRect.minY, width: 1, height: lineRect.height)
-                    // 转到屏幕坐标
                     rect = textView.convert(rect, to: nil)
                     if let window = textView.window {
                         rect = window.convertToScreen(rect)
@@ -259,7 +332,6 @@ struct EditorView: NSViewRepresentable {
                 }
             }
             
-            // CompletionPopover 期望的是窗口坐标系的 NSRect
             if let window = textView.window {
                 return window.convertFromScreen(rect)
             }
