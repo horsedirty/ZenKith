@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import AppKit
 import PDFKit
-import CodeEditor
 
 /// 主内容布局：左侧笔记列表（可折叠） + 中央编辑/预览区 + 右侧可呼出 AI 抽屉
 struct ContentView: View {
@@ -236,29 +235,14 @@ struct ContentView: View {
 
     // MARK: - 编辑器
 
-    private var codeEditorLanguage: CodeEditor.Language {
-        switch settings.editorLanguage {
-        case .markdown: return .markdown
-        case .latex:    return .tex
-        }
-    }
-
-    private var codeEditorFontSize: Binding<CGFloat> {
-        Binding<CGFloat>(
-            get: { CGFloat(settings.fontSize) },
-            set: { settings.fontSize = Double($0) }
-        )
-    }
-
     private var editorPane: some View {
         VStack(spacing: 0) {
             if let note = manager.selectedNote {
                 if note.fileType.isEditable {
-                    CodeEditor(
-                        source: $manager.editingContent,
-                        language: codeEditorLanguage,
-                        theme: .pojoaque,
-                        fontSize: codeEditorFontSize
+                    EditorView(
+                        text: $manager.editingContent,
+                        fontSize: settings.fontSize,
+                        language: settings.editorLanguage
                     )
                     .id(note.id)
                 } else {
