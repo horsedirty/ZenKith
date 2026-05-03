@@ -5,11 +5,11 @@ struct EditorView: NSViewRepresentable {
     @Binding var text: String
     var fontSize: Double
     var language: EditorLanguage = .markdown
-
+    
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, language: language)
     }
-
+    
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView(frame: .zero)
         scrollView.hasVerticalScroller = true
@@ -17,7 +17,7 @@ struct EditorView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
-
+        
         let textView = NSTextView(frame: .zero)
         textView.delegate = context.coordinator
         textView.isRichText = false
@@ -39,117 +39,122 @@ struct EditorView: NSViewRepresentable {
         textView.textContainer?.lineFragmentPadding = 8
         let font = NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular)
         textView.font = font
-
+        
         let dark = NSApp.effectiveAppearance.name == .darkAqua || NSApp.effectiveAppearance.name == .vibrantDark
         textView.backgroundColor = dark
-            ? NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-            : NSColor(red: 0.98, green: 0.98, blue: 0.98, alpha: 1)
+        ? NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+        : NSColor(red: 0.98, green: 0.98, blue: 0.98, alpha: 1)
         textView.textColor = dark
-            ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
-            : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+        ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
+        : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
         textView.insertionPointColor = .controlAccentColor
-
+        
         scrollView.documentView = textView
-
+        
         let rulerView = LineNumberRulerView(scrollView: scrollView, orientation: .verticalRuler)
         rulerView.textView = textView
         rulerView.font = font
         rulerView.backgroundColor = dark
-            ? NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1)
-            : NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1)
+        ? NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1)
+        : NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1)
         rulerView.textColor = dark
-            ? NSColor(red: 0.45, green: 0.45, blue: 0.50, alpha: 1)
-            : NSColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
+        ? NSColor(red: 0.45, green: 0.45, blue: 0.50, alpha: 1)
+        : NSColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
         rulerView.separatorColor = .separatorColor
         scrollView.verticalRulerView = rulerView
         scrollView.hasVerticalRuler = true
         scrollView.rulersVisible = true
         scrollView.contentView.postsFrameChangedNotifications = true
-
+        
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.rulerView = rulerView
         context.coordinator.completionPopover = CompletionPopover(engine: context.coordinator.completionEngine)
-
+        
         context.coordinator.wireCompletionEngine()
-
+        
         // 连接语法高亮
         context.coordinator.setupHighlighting(for: textView)
-
+        
         return scrollView
     }
-
+    
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let tv = scrollView.documentView as? NSTextView else { return }
-
+        
+        let font = NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular)
+        let dark = NSApp.effectiveAppearance.name == .darkAqua || NSApp.effectiveAppearance.name == .vibrantDark
+        
+        // 先设置视觉属性，避免后续赋值覆盖语法高亮
+        tv.font = font
+        tv.backgroundColor = dark
+        ? NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+        : NSColor(red: 0.98, green: 0.98, blue: 0.98, alpha: 1)
+        tv.textColor = dark
+        ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
+        : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+        tv.insertionPointColor = .controlAccentColor
+        
+        if let ruler = context.coordinator.rulerView {
+            ruler.font = font
+            ruler.backgroundColor = dark
+            ? NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1)
+            : NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1)
+            ruler.textColor = dark
+            ? NSColor(red: 0.45, green: 0.45, blue: 0.50, alpha: 1)
+            : NSColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
+        }
+        
+        // 外部文本变更
+        var textDidChange = false
         if tv.string != text, !context.coordinator.isInternalEdit {
             context.coordinator.isProgrammaticChange = true
             tv.textStorage?.setAttributedString(NSAttributedString(string: text))
             tv.undoManager?.removeAllActions()
             context.coordinator.isProgrammaticChange = false
-
-            // 外部文本变更后重新全量高亮
+            textDidChange = true
+        }
+        
+        // 语言切换或外观变化时更新高亮器（在视觉属性之后执行）
+        context.coordinator.updateHighlighterIfNeeded(language: language, dark: dark, tv: tv, fontSize: fontSize)
+        
+        // 外部文本变更后补充全量高亮（updateHighlighterIfNeeded 可能因无主题/语言变化而跳过）
+        if textDidChange {
             context.coordinator.applyFullHighlightIfNeeded(to: tv)
         }
-
-        let font = NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular)
-        tv.font = font
-
-        let dark = NSApp.effectiveAppearance.name == .darkAqua || NSApp.effectiveAppearance.name == .vibrantDark
-        tv.backgroundColor = dark
-            ? NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-            : NSColor(red: 0.98, green: 0.98, blue: 0.98, alpha: 1)
-        tv.textColor = dark
-            ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
-            : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-        tv.insertionPointColor = .controlAccentColor
-
-        if let ruler = context.coordinator.rulerView {
-            ruler.font = font
-            ruler.backgroundColor = dark
-                ? NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1)
-                : NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1)
-            ruler.textColor = dark
-                ? NSColor(red: 0.45, green: 0.45, blue: 0.50, alpha: 1)
-                : NSColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
-        }
-
-        // 语言切换或外观变化时更新高亮器
-        context.coordinator.updateHighlighterIfNeeded(language: language, dark: dark, tv: tv, fontSize: fontSize)
-
+        
         context.coordinator.language = language
     }
-
+    
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding var text: String
         var language: EditorLanguage
-
+        
         fileprivate var isInternalEdit = false
         fileprivate var isProgrammaticChange = false
         fileprivate weak var textView: NSTextView?
         fileprivate weak var scrollView: NSScrollView?
         fileprivate weak var rulerView: LineNumberRulerView?
-
+        
         let completionEngine = LatexCompletionEngine()
         fileprivate var completionPopover: CompletionPopover?
-
+        
         // 语法高亮
         private let syntaxHighlighter = LatexSyntaxHighlighter()
         private var highlightingDelegate: LatexHighlightingDelegate?
         private var lastHighlightedDark: Bool?
-
+        
         init(text: Binding<String>, language: EditorLanguage) {
             self._text = text
             self.language = language
         }
-
+        
         // MARK: - Syntax Highlighting Setup
-
+        
         func setupHighlighting(for textView: NSTextView) {
             let delegate = LatexHighlightingDelegate(highlighter: syntaxHighlighter)
             self.highlightingDelegate = delegate
-
-            // 只在 LaTeX 模式下激活
+            
             if language == .latex {
                 textView.textStorage?.delegate = delegate
                 if let ts = textView.textStorage {
@@ -157,37 +162,32 @@ struct EditorView: NSViewRepresentable {
                 }
             }
         }
-
+        
         func applyFullHighlightIfNeeded(to textView: NSTextView) {
             guard language == .latex, let ts = textView.textStorage else { return }
             syntaxHighlighter.highlight(ts)
         }
-
+        
         func updateHighlighterIfNeeded(language: EditorLanguage, dark: Bool, tv: NSTextView, fontSize: Double) {
             let themeChanged = (lastHighlightedDark != dark)
             let languageChanged = (self.language != language)
-
+            
             if languageChanged || themeChanged {
                 lastHighlightedDark = dark
-
-                // 更新主题
+                
                 syntaxHighlighter.theme = dark ? .dark : .light
-                // 同步字体大小
                 syntaxHighlighter.theme.defaultFont = .monospacedSystemFont(
                     ofSize: max(12, min(32, fontSize)), weight: .regular
                 )
-
+                
                 if language == .latex {
-                    // 激活高亮 delegate
                     if tv.textStorage?.delegate !== highlightingDelegate {
                         tv.textStorage?.delegate = highlightingDelegate
                     }
-                    // 全量重新高亮
                     if let ts = tv.textStorage {
                         syntaxHighlighter.highlight(ts)
                     }
                 } else {
-                    // 非 LaTeX 模式，移除高亮 delegate 并恢复默认样式
                     if tv.textStorage?.delegate === highlightingDelegate {
                         tv.textStorage?.delegate = nil
                     }
@@ -196,8 +196,8 @@ struct EditorView: NSViewRepresentable {
                         let defaultAttrs: [NSAttributedString.Key: Any] = [
                             .font: NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular),
                             .foregroundColor: dark
-                                ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
-                                : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+                            ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
+                            : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
                         ]
                         ts.beginEditing()
                         ts.setAttributes(defaultAttrs, range: fullRange)

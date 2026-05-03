@@ -7,32 +7,32 @@ final class LatexSyntaxHighlighter {
     // MARK: - Theme
 
     struct Theme {
-        var command: NSColor          // \command
-        var environment: NSColor      // \begin{...}, \end{...}
-        var mathInline: NSColor       // $...$
-        var mathDisplay: NSColor      // $$...$$, \[...\]
-        var comment: NSColor          // % ...
-        var braces: NSColor           // { }
-        var brackets: NSColor         // [ ]
-        var sectionCommand: NSColor   // \section, \chapter, etc.
-        var textFormatting: NSColor   // \textbf, \textit, etc.
-        var specialChar: NSColor      // \&, \%, \$, etc.
-        var argumentText: NSColor     // text inside { } after commands
+        var command: NSColor
+        var environment: NSColor
+        var mathInline: NSColor
+        var mathDisplay: NSColor
+        var comment: NSColor
+        var braces: NSColor
+        var brackets: NSColor
+        var sectionCommand: NSColor
+        var textFormatting: NSColor
+        var specialChar: NSColor
+        var argumentText: NSColor
         var defaultText: NSColor
         var defaultFont: NSFont
 
         static let dark = Theme(
-            command: NSColor(red: 0.40, green: 0.72, blue: 1.00, alpha: 1),       // blue
-            environment: NSColor(red: 0.95, green: 0.55, blue: 0.30, alpha: 1),   // orange
-            mathInline: NSColor(red: 0.60, green: 0.80, blue: 0.40, alpha: 1),    // green
-            mathDisplay: NSColor(red: 0.50, green: 0.75, blue: 0.35, alpha: 1),   // darker green
-            comment: NSColor(red: 0.50, green: 0.50, blue: 0.55, alpha: 1),       // gray
-            braces: NSColor(red: 0.85, green: 0.70, blue: 0.30, alpha: 1),        // gold
-            brackets: NSColor(red: 0.70, green: 0.60, blue: 0.85, alpha: 1),      // purple
-            sectionCommand: NSColor(red: 1.00, green: 0.60, blue: 0.40, alpha: 1),// coral
-            textFormatting: NSColor(red: 0.75, green: 0.55, blue: 0.90, alpha: 1),// violet
-            specialChar: NSColor(red: 0.90, green: 0.45, blue: 0.45, alpha: 1),   // red
-            argumentText: NSColor(red: 0.85, green: 0.75, blue: 0.55, alpha: 1),  // warm tan
+            command: NSColor(red: 0.40, green: 0.72, blue: 1.00, alpha: 1),
+            environment: NSColor(red: 0.95, green: 0.55, blue: 0.30, alpha: 1),
+            mathInline: NSColor(red: 0.60, green: 0.80, blue: 0.40, alpha: 1),
+            mathDisplay: NSColor(red: 0.50, green: 0.75, blue: 0.35, alpha: 1),
+            comment: NSColor(red: 0.50, green: 0.50, blue: 0.55, alpha: 1),
+            braces: NSColor(red: 0.85, green: 0.70, blue: 0.30, alpha: 1),
+            brackets: NSColor(red: 0.70, green: 0.60, blue: 0.85, alpha: 1),
+            sectionCommand: NSColor(red: 1.00, green: 0.60, blue: 0.40, alpha: 1),
+            textFormatting: NSColor(red: 0.75, green: 0.55, blue: 0.90, alpha: 1),
+            specialChar: NSColor(red: 0.90, green: 0.45, blue: 0.45, alpha: 1),
+            argumentText: NSColor(red: 0.85, green: 0.75, blue: 0.55, alpha: 1),
             defaultText: NSColor(red: 0.92, green: 0.92, blue: 0.94, alpha: 1),
             defaultFont: .monospacedSystemFont(ofSize: 13, weight: .regular)
         )
@@ -56,17 +56,22 @@ final class LatexSyntaxHighlighter {
 
     // MARK: - Token
 
-    private enum TokenType {
-        case comment
-        case mathDisplay
-        case mathInline
-        case environment
-        case sectionCommand
-        case textFormatting
-        case specialChar
-        case command
+    private enum TokenType: Int, Comparable {
+        // Higher raw value = higher priority (applied last, wins visually)
+        case brackets = 0
         case braces
-        case brackets
+        case command
+        case specialChar
+        case textFormatting
+        case sectionCommand
+        case environment
+        case mathInline
+        case mathDisplay
+        case comment
+
+        static func < (lhs: TokenType, rhs: TokenType) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
     }
 
     // MARK: - Properties
@@ -75,8 +80,10 @@ final class LatexSyntaxHighlighter {
         didSet { cachedPatterns = nil }
     }
 
+    /// Flag used by the delegate to prevent re-entrant highlighting.
+    fileprivate var isApplyingHighlight = false
+
     private var cachedPatterns: [(NSRegularExpression, TokenType)]?
-    private var isHighlighting = false
 
     // MARK: - Known Command Sets
 
@@ -95,11 +102,6 @@ final class LatexSyntaxHighlighter {
         "centering", "raggedright", "raggedleft"
     ]
 
-    private static let specialChars: Set<String> = [
-        "\\&", "\\%", "\\$", "\\#", "\\_", "\\{", "\\}",
-        "\\~", "\\^", "\\\\", "\\newline", "\\linebreak"
-    ]
-
     // MARK: - Init
 
     init(theme: Theme? = nil) {
@@ -109,77 +111,70 @@ final class LatexSyntaxHighlighter {
 
     // MARK: - Public API
 
-    /// 对整个文本存储进行语法高亮
+    /// Full highlight of the entire text storage. Call on initial load or theme/language change.
     func highlight(_ textStorage: NSTextStorage) {
-        guard !isHighlighting else { return }
-        isHighlighting = true
-        defer { isHighlighting = false }
-
-        let fullRange = NSRange(location: 0, length: textStorage.length)
-        let text = textStorage.string
-
-        textStorage.beginEditing()
-
-        // 重置默认样式
-        let defaultAttrs: [NSAttributedString.Key: Any] = [
-            .font: theme.defaultFont,
-            .foregroundColor: theme.defaultText
-        ]
-        textStorage.setAttributes(defaultAttrs, range: fullRange)
-
-        // 按优先级从低到高应用高亮（后应用的覆盖先应用的）
-        applyTokenHighlighting(to: textStorage, text: text)
-
-        textStorage.endEditing()
-    }
-
-    /// 增量高亮：只处理编辑影响的行范围
-    func highlightEdited(_ textStorage: NSTextStorage, editedRange: NSRange) {
-        guard !isHighlighting else { return }
-        isHighlighting = true
-        defer { isHighlighting = false }
-
-        let text = textStorage.string as NSString
         let totalLength = textStorage.length
         guard totalLength > 0 else { return }
 
-        // 扩展到完整行范围，并额外包含前后各一行以处理跨行结构
-        let clampedRange = NSRange(
-            location: min(editedRange.location, totalLength - 1),
-            length: min(editedRange.length, totalLength - editedRange.location)
-        )
-        var lineRange = text.lineRange(for: clampedRange)
+        isApplyingHighlight = true
+        defer { isApplyingHighlight = false }
 
-        // 向前扩展一行
+        let fullRange = NSRange(location: 0, length: totalLength)
+        let text = textStorage.string
+
+        textStorage.beginEditing()
+        textStorage.setAttributes(defaultAttributes, range: fullRange)
+        applyTokenHighlighting(to: textStorage, text: text, offset: 0)
+        textStorage.endEditing()
+    }
+
+    /// Incremental highlight covering the edited region expanded to full lines.
+    /// The caller must ensure `editedRange` is still valid for the current text.
+    func highlightLines(containing editedRange: NSRange, in textStorage: NSTextStorage) {
+        let totalLength = textStorage.length
+        guard totalLength > 0 else { return }
+
+        // Clamp the incoming range to current text length
+        let safeLocation = min(editedRange.location, totalLength)
+        let safeLength = min(editedRange.length, totalLength - safeLocation)
+        let safeRange = NSRange(location: safeLocation, length: safeLength)
+
+        let nsText = textStorage.string as NSString
+
+        // Expand to full lines, plus one line before and after for cross-line constructs
+        var lineRange = nsText.lineRange(for: safeRange)
+
         if lineRange.location > 0 {
-            let prevLineRange = text.lineRange(for: NSRange(location: lineRange.location - 1, length: 0))
-            lineRange = NSUnionRange(prevLineRange, lineRange)
+            let prevLine = nsText.lineRange(for: NSRange(location: lineRange.location - 1, length: 0))
+            lineRange = NSUnionRange(prevLine, lineRange)
         }
-        // 向后扩展一行
         let endLoc = NSMaxRange(lineRange)
         if endLoc < totalLength {
-            let nextLineRange = text.lineRange(for: NSRange(location: endLoc, length: 0))
-            lineRange = NSUnionRange(lineRange, nextLineRange)
+            let nextLine = nsText.lineRange(for: NSRange(location: endLoc, length: 0))
+            lineRange = NSUnionRange(lineRange, nextLine)
         }
 
-        // 安全裁剪
         lineRange = NSIntersectionRange(lineRange, NSRange(location: 0, length: totalLength))
         guard lineRange.length > 0 else { return }
 
-        textStorage.beginEditing()
+        isApplyingHighlight = true
+        defer { isApplyingHighlight = false }
 
-        // 重置该范围的默认样式
-        let defaultAttrs: [NSAttributedString.Key: Any] = [
+        let substring = nsText.substring(with: lineRange)
+
+        textStorage.beginEditing()
+        textStorage.setAttributes(defaultAttributes, range: lineRange)
+        applyTokenHighlighting(to: textStorage, text: substring, offset: lineRange.location)
+        textStorage.endEditing()
+    }
+
+    // MARK: - Default Attributes
+
+    private var defaultAttributes: [NSAttributedString.Key: Any] {
+        [
             .font: theme.defaultFont,
             .foregroundColor: theme.defaultText
         ]
-        textStorage.setAttributes(defaultAttrs, range: lineRange)
-
-        // 对该范围内的文本进行高亮
-        let substring = text.substring(with: lineRange)
-        applyTokenHighlighting(to: textStorage, text: substring, offset: lineRange.location)
-
-        textStorage.endEditing()
     }
 
     // MARK: - Pattern Building
@@ -195,40 +190,40 @@ final class LatexSyntaxHighlighter {
             }
         }
 
-        // 1. 注释（最高优先级，最后绘制以覆盖其他）
-        //    匹配 % 开头到行尾，但排除 \%
-        add(#"(?<!\\)%.*$"#, .comment, options: .anchorsMatchLines)
+        // Order: low priority first. Higher-priority tokens are applied later and overwrite.
 
-        // 2. 数学模式 - display: $$...$$ 或 \[...\]
-        add(#"\$\$[\s\S]*?\$\$"#, .mathDisplay)
-        add(#"\\\[[\s\S]*?\\\]"#, .mathDisplay)
+        // Braces and brackets
+        add(#"[{}]"#, .braces)
+        add(#"[\[\]]"#, .brackets)
 
-        // 3. 数学模式 - inline: $...$（非贪婪，不跨行）
-        add(#"(?<!\\)\$(?!\$)(?:[^$\\]|\\.)*\$"#, .mathInline)
-        // \(...\)
-        add(#"\\\(.*?\\\)"#, .mathInline)
+        // Generic commands: \commandname
+        add(#"\\[a-zA-Z@]+"#, .command)
 
-        // 4. 环境命令: \begin{...} 和 \end{...}
-        add(#"\\(?:begin|end)\s*\{[^}]*\}"#, .environment)
-
-        // 5. 章节命令
-        let sectionPattern = Self.sectionCommands.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-        add(#"\\(?:"# + sectionPattern + #")(?:\*)?(?=\s*[\[{]|\s*$)"#, .sectionCommand)
-
-        // 6. 文本格式命令
-        let fmtPattern = Self.formattingCommands.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
-        add(#"\\(?:"# + fmtPattern + #")(?=\s*[\[{]|\s*$|\b)"#, .textFormatting)
-
-        // 7. 特殊转义字符: \&, \%, \$ 等
+        // Special escape characters: \&, \%, \$ etc.
         add(#"\\[&%$#_{}~^]"#, .specialChar)
         add(#"\\(?:newline|linebreak)\b"#, .specialChar)
 
-        // 8. 通用命令: \commandname
-        add(#"\\[a-zA-Z@]+"#, .command)
+        // Text formatting commands
+        let fmtPattern = Self.formattingCommands.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        add(#"\\(?:"# + fmtPattern + #")(?=\s*[\[{]|\s*$|\b)"#, .textFormatting)
 
-        // 9. 花括号和方括号
-        add(#"[{}]"#, .braces)
-        add(#"[\[\]]"#, .brackets)
+        // Section commands
+        let sectionPattern = Self.sectionCommands.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        add(#"\\(?:"# + sectionPattern + #")(?:\*)?(?=\s*[\[{]|\s*$)"#, .sectionCommand)
+
+        // Environment commands: \begin{...} and \end{...}
+        add(#"\\(?:begin|end)\s*\{[^}]*\}"#, .environment)
+
+        // Math inline: $...$ and \(...\)
+        add(#"(?<!\\)\$(?!\$)(?:[^$\\]|\\.)*\$"#, .mathInline)
+        add(#"\\\(.*?\\\)"#, .mathInline)
+
+        // Math display: $$...$$ and \[...\]
+        add(#"\$\$[\s\S]*?\$\$"#, .mathDisplay)
+        add(#"\\\[[\s\S]*?\\\]"#, .mathDisplay)
+
+        // Comments (highest priority — applied last, overwrites everything)
+        add(#"(?<!\\)%.*$"#, .comment, options: .anchorsMatchLines)
 
         cachedPatterns = result
         return result
@@ -236,52 +231,34 @@ final class LatexSyntaxHighlighter {
 
     // MARK: - Token Highlighting
 
-    private func applyTokenHighlighting(to textStorage: NSTextStorage, text: String, offset: Int = 0) {
+    private func applyTokenHighlighting(to textStorage: NSTextStorage, text: String, offset: Int) {
         let nsText = text as NSString
-        let fullRange = NSRange(location: 0, length: nsText.length)
-
-        // 记录注释区域，其他 token 不应覆盖注释
-        var commentRanges: [NSRange] = []
-
-        // 先收集注释范围
-        if let commentRegex = try? NSRegularExpression(pattern: #"(?<!\\)%.*$"#, options: .anchorsMatchLines) {
-            let matches = commentRegex.matches(in: text, range: fullRange)
-            for match in matches {
-                commentRanges.append(match.range)
-            }
-        }
+        let searchRange = NSRange(location: 0, length: nsText.length)
+        let storageLength = textStorage.length
 
         for (regex, tokenType) in patterns() {
-            let matches = regex.matches(in: text, range: fullRange)
+            let matches = regex.matches(in: text, range: searchRange)
             for match in matches {
                 let range = match.range
                 guard range.location != NSNotFound, range.length > 0 else { continue }
 
-                // 如果不是注释 token，检查是否与注释区域重叠
-                if tokenType != .comment {
-                    let overlapsComment = commentRanges.contains { NSIntersectionRange($0, range).length > 0 }
-                    if overlapsComment { continue }
-                }
+                let adjusted = NSRange(location: range.location + offset, length: range.length)
+                guard adjusted.location >= 0,
+                      adjusted.location + adjusted.length <= storageLength else { continue }
 
-                let color = colorForToken(tokenType)
-                let adjustedRange = NSRange(location: range.location + offset, length: range.length)
+                textStorage.addAttribute(.foregroundColor, value: colorForToken(tokenType), range: adjusted)
 
-                // 安全检查
-                guard adjustedRange.location + adjustedRange.length <= textStorage.length else { continue }
-
-                textStorage.addAttribute(.foregroundColor, value: color, range: adjustedRange)
-
-                // 注释使用斜体
+                // Comments in italic
                 if tokenType == .comment {
-                    if let italicFont = NSFontManager.shared.convert(theme.defaultFont, toHaveTrait: .italicFontMask) as NSFont? {
-                        textStorage.addAttribute(.font, value: italicFont, range: adjustedRange)
+                    if let italic = NSFontManager.shared.convert(theme.defaultFont, toHaveTrait: .italicFontMask) as NSFont? {
+                        textStorage.addAttribute(.font, value: italic, range: adjusted)
                     }
                 }
 
-                // 章节命令加粗
+                // Section commands in bold
                 if tokenType == .sectionCommand {
-                    if let boldFont = NSFontManager.shared.convert(theme.defaultFont, toHaveTrait: .boldFontMask) as NSFont? {
-                        textStorage.addAttribute(.font, value: boldFont, range: adjustedRange)
+                    if let bold = NSFontManager.shared.convert(theme.defaultFont, toHaveTrait: .boldFontMask) as NSFont? {
+                        textStorage.addAttribute(.font, value: bold, range: adjusted)
                     }
                 }
             }
@@ -304,9 +281,11 @@ final class LatexSyntaxHighlighter {
     }
 }
 
-// MARK: - NSTextStorageDelegate Integration
+// MARK: - NSTextStorageDelegate for Incremental Highlighting
 
-/// 将此 delegate 设置到 NSTextStorage 上，即可自动在编辑时触发增量高亮
+/// Attach this as the NSTextStorage delegate to get automatic incremental highlighting on edits.
+/// Key design: highlighting runs synchronously inside `didProcessEditing` while the
+/// `isApplyingHighlight` flag prevents infinite recursion from attribute-only changes.
 final class LatexHighlightingDelegate: NSObject, NSTextStorageDelegate {
 
     let highlighter: LatexSyntaxHighlighter
@@ -322,13 +301,14 @@ final class LatexHighlightingDelegate: NSObject, NSTextStorageDelegate {
         range editedRange: NSRange,
         changeInLength delta: Int
     ) {
-        // 只在文字内容变化时触发，忽略纯属性变化
+        // Only act on character edits, not our own attribute changes
         guard editedMask.contains(.editedCharacters) else { return }
 
-        // 在下一个 run loop 中执行高亮，避免在 textStorage 编辑回调中嵌套编辑
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.highlighter.highlightEdited(textStorage, editedRange: editedRange)
-        }
+        // Prevent re-entrance from our own attribute modifications
+        guard !highlighter.isApplyingHighlight else { return }
+
+        // Run synchronously — editedRange is guaranteed valid right now.
+        // Async dispatch was the root cause of stale-range crashes.
+        highlighter.highlightLines(containing: editedRange, in: textStorage)
     }
 }
