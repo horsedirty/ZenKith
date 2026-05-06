@@ -12,6 +12,6 @@ struct MessageMarkdownView: View {
         StructuredText(markdown: markdown)
             .textual.textSelection(.enabled)
             .textual.structuredTextStyle(.default)
-            .font(.callout)
+            .font(.appCallout)
     }
 }

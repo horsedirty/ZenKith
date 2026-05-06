@@ -250,7 +250,7 @@ final class LatexService {
         return """
         <!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <style>:root{--bg:#fff;--text:#1d1d1f}@media(prefers-color-scheme:dark){:root{--bg:#1c1c1e;--text:#e5e5ea}}
-        body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Latin Modern Math",serif;font-size:\(fontSize)px;line-height:1.8;color:var(--text);background:var(--bg);max-width:860px;margin:0 auto;padding:20px 24px 60px}</style>
+        body{font-family:"Times New Roman","Times","STSongti-SC","Songti SC",serif;font-size:\(fontSize)px;line-height:1.8;color:var(--text);background:var(--bg);max-width:860px;margin:0 auto;padding:20px 24px 60px}</style>
         <script>MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],displayMath:[['$$','$$'],['\\\\[','\\\\]']],processEscapes:false,processRefs:true,packages:{'[+]':['noerrors','noundefined']}},options:{ignoreHtmlClass:'no-mathjax'},startup:{typeset:false}};</script>
         <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script></head>
         <body><div id="lx">\(escaped)</div>

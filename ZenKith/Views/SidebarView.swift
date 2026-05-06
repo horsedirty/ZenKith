@@ -114,7 +114,7 @@ struct SidebarView: View {
                     ? "MarkFlow"
                     : manager.currentDirectory.lastPathComponent
             )
-            .font(.headline)
+            .font(.appHeadline)
             .lineLimit(1)
 
             Spacer()
@@ -135,7 +135,7 @@ struct SidebarView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
-                    .font(.title3)
+                    .font(.appTitle3)
             }
             .menuStyle(.borderlessButton)
             .frame(width: 24)
@@ -153,9 +153,9 @@ struct SidebarView: View {
                 Button(action: { manager.goBack() }) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                            .font(.caption2)
+                            .font(.appCaption2)
                         Text("返回上级")
-                            .font(.caption)
+                            .font(.appCaption)
                     }
                     .padding(.vertical, 3)
                     .padding(.horizontal, 8)
@@ -165,7 +165,7 @@ struct SidebarView: View {
                 .buttonStyle(.borderless)
 
                 Text(manager.currentDirectory.lastPathComponent)
-                    .font(.caption)
+                    .font(.appCaption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
 
@@ -224,7 +224,7 @@ struct SidebarView: View {
     ) -> some View {
         VStack(spacing: 16) {
             Text(title)
-                .font(.headline)
+                .font(.appHeadline)
 
             TextField("名称", text: text)
                 .textFieldStyle(.roundedBorder)

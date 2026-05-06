@@ -74,10 +74,10 @@ struct AIDrawer: View {
             } label: {
                 HStack(spacing: 4) {
                     Label(currentSessionTitle, systemImage: "sparkles")
-                        .font(.headline)
+                        .font(.appHeadline)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
-                        .font(.caption2)
+                        .font(.appCaption2)
                         .foregroundColor(.secondary)
                 }
             }
@@ -155,11 +155,11 @@ struct AIDrawer: View {
             }
         } label: {
             Text(currentModelLabel)
-                .font(.caption)
+                .font(.appCaption)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
             Image(systemName: "chevron.down")
-                .font(.caption2)
+                .font(.appCaption2)
                 .foregroundColor(.secondary)
         }
         .menuStyle(.borderlessButton)
@@ -232,7 +232,7 @@ struct AIDrawer: View {
         HStack(alignment: .top, spacing: 8) {
             if !isUser {
                 Image(systemName: "sparkles")
-                    .font(.caption2)
+                    .font(.appCaption2)
                     .foregroundColor(.accentColor)
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(Color.accentColor.opacity(0.1)))
@@ -256,7 +256,7 @@ struct AIDrawer: View {
                     if isUser {
                         let displayText = userDisplayContent(message)
                         Text(displayText)
-                            .font(.callout)
+                            .font(.appCallout)
                             .padding(.horizontal, 10).padding(.vertical, 8)
                             .background(Color.accentColor)
                             .foregroundColor(.white)
@@ -276,7 +276,7 @@ struct AIDrawer: View {
 
             if isUser {
                 Image(systemName: "person.circle.fill")
-                    .font(.caption2)
+                    .font(.appCaption2)
                     .foregroundColor(.secondary)
                     .frame(width: 22, height: 22)
             }
@@ -317,10 +317,10 @@ struct AIDrawer: View {
         ForEach(attachments) { att in
             HStack(spacing: 6) {
                 Image(systemName: fileIconName(for: att.fileExtension))
-                    .font(.caption)
+                    .font(.appCaption)
                     .foregroundColor(.white.opacity(0.9))
                 Text(att.displayName)
-                    .font(.caption)
+                    .font(.appCaption)
                     .foregroundColor(.white.opacity(0.9))
                     .lineLimit(1)
             }
@@ -361,22 +361,22 @@ struct AIDrawer: View {
             Divider()
                 .padding(.vertical, 2)
             Text("📎 引用来源")
-                .font(.caption)
+                .font(.appCaption)
                 .fontWeight(.semibold)
                 .foregroundColor(.secondary)
             ForEach(results) { item in
                 HStack(alignment: .top, spacing: 4) {
                     Text("[\(item.id)]")
-                        .font(.caption2)
+                        .font(.appCaption2)
                         .foregroundColor(.accentColor)
                         .frame(width: 20, alignment: .leading)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.title)
-                            .font(.caption2)
+                            .font(.appCaption2)
                             .foregroundColor(.primary)
                             .lineLimit(2)
                         Text(item.url)
-                            .font(.system(size: 10))
+                            .font(.appFont(size: 10))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                     }
@@ -394,7 +394,7 @@ struct AIDrawer: View {
     private var streamingBubble: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkles")
-                .font(.caption2)
+                .font(.appCaption2)
                 .foregroundColor(.accentColor)
                 .frame(width: 22, height: 22)
                 .background(Circle().fill(Color.accentColor.opacity(0.1)))
@@ -423,7 +423,7 @@ struct AIDrawer: View {
                     // 仅有思考还没有正文
                     HStack(spacing: 4) {
                         ProgressView().scaleEffect(0.6)
-                        Text("生成中…").font(.caption).foregroundColor(.secondary)
+                        Text("生成中…").font(.appCaption).foregroundColor(.secondary)
                     }
                 }
             }
@@ -441,9 +441,9 @@ struct AIDrawer: View {
                 else { expandedReasoning.insert(id) }
             }) {
                 HStack(spacing: 4) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right").font(.caption2)
-                    Text("思考过程").font(.caption2)
-                    Text(isExpanded ? "▲" : "▼").font(.caption2)
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right").font(.appCaption2)
+                    Text("思考过程").font(.appCaption2)
+                    Text(isExpanded ? "▲" : "▼").font(.appCaption2)
                 }
                 .foregroundColor(.secondary)
             }
@@ -453,7 +453,7 @@ struct AIDrawer: View {
                 ScrollView(.vertical) {
                     InlineText(markdown: reasoning)
                         .textual.textSelection(.enabled)
-                        .font(.caption)
+                        .font(.appCaption)
                         .foregroundColor(.secondary)
                         .padding(8)
                 }
@@ -470,11 +470,11 @@ struct AIDrawer: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 ProgressView().scaleEffect(0.5)
-                Text("深度思考中…").font(.caption2).foregroundColor(.secondary)
+                Text("深度思考中…").font(.appCaption2).foregroundColor(.secondary)
             }
             ScrollView(.vertical) {
                 Text(viewModel.streamingReasoning)
-                    .font(.caption)
+                    .font(.appCaption)
                     .foregroundColor(.secondary.opacity(0.8))
                     .padding(8)
                     .textSelection(.enabled)
@@ -501,13 +501,13 @@ struct AIDrawer: View {
                         ForEach(viewModel.pendingAttachments) { att in
                             HStack(spacing: 4) {
                                 Image(systemName: fileIconName(for: att.fileExtension))
-                                    .font(.caption2)
+                                    .font(.appCaption2)
                                 Text(att.displayName)
-                                    .font(.caption2)
+                                    .font(.appCaption2)
                                     .lineLimit(1)
                                 Button(action: { viewModel.removeAttachment(id: att.id) }) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.caption2)
+                                        .font(.appCaption2)
                                         .foregroundColor(.secondary)
                                 }
                                 .buttonStyle(.borderless)
@@ -551,7 +551,7 @@ struct AIDrawer: View {
             // 文件选择按钮
             Button(action: { isImportingFile = true }) {
                 Image(systemName: "paperclip")
-                    .font(.body)
+                    .font(.appBody)
             }
             .buttonStyle(.borderless)
             .help("附加文件 (图片、代码、PDF 等)")
@@ -579,7 +579,7 @@ struct AIDrawer: View {
                 }
             }) {
                 Image(systemName: viewModel.isStreaming ? "stop.circle.fill" : "arrow.up.circle.fill")
-                    .font(.title2)
+                    .font(.appTitle2)
             }
             .buttonStyle(.borderless)
             .disabled(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -594,7 +594,7 @@ struct AIDrawer: View {
 
     private var configPanelView: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("AI 配置").font(.headline)
+            Text("AI 配置").font(.appHeadline)
 
             Picker("服务商", selection: $viewModel.config.provider) {
                 ForEach(AIProvider.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -609,11 +609,11 @@ struct AIDrawer: View {
                 .textFieldStyle(.roundedBorder)
 
             Divider()
-            Text("API 密钥管理").font(.subheadline).foregroundColor(.secondary)
+            Text("API 密钥管理").font(.appSubheadline).foregroundColor(.secondary)
             SecureField("API Key", text: Binding(
                 get: { viewModel.getAPIKey() }, set: { viewModel.setAPIKey($0) }
             )).textFieldStyle(.roundedBorder)
-            Text("密钥安全存储在系统钥匙串中").font(.caption).foregroundColor(.secondary)
+            Text("密钥安全存储在系统钥匙串中").font(.appCaption).foregroundColor(.secondary)
 
             HStack {
                 Spacer()

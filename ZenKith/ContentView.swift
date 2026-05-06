@@ -120,7 +120,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCompileLog) {
             VStack(spacing: 12) {
-                Text("编译日志").font(.headline)
+                Text("编译日志").font(.appHeadline)
                 ScrollView {
                     Text(compileLog.isEmpty ? "无输出" : compileLog)
                         .font(.system(size: 11, design: .monospaced))
@@ -144,7 +144,7 @@ struct ContentView: View {
                 .frame(width: 1)
                 .overlay(
                     Image(systemName: sidebarCollapsed ? "chevron.right" : "chevron.left")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.appFont(size: 8))
                         .foregroundColor(.secondary)
                         .offset(x: sidebarCollapsed ? 10 : -10)
                 )
@@ -158,11 +158,11 @@ struct ContentView: View {
     private var collapsedSidebar: some View {
         VStack(spacing: 8) {
             Button(action: { sidebarCollapsed = false }) {
-                Image(systemName: "sidebar.left").font(.title3)
+                Image(systemName: "sidebar.left").font(.appTitle3)
             }
             .buttonStyle(.borderless).help("展开侧边栏")
             Button(action: { showAIDrawer.toggle() }) {
-                Image(systemName: "sparkles").font(.title3)
+                Image(systemName: "sparkles").font(.appTitle3)
             }
             .buttonStyle(.borderless).help("AI 助手")
             Spacer()
@@ -220,13 +220,13 @@ struct ContentView: View {
                     .resizable().aspectRatio(contentMode: .fit)
                     .padding()
             } else {
-                VStack { Image(systemName: "photo").font(.largeTitle); Text("无法加载图片") }
+                VStack { Image(systemName: "photo").font(.appLargeTitle); Text("无法加载图片") }
             }
         case .pdfDoc:
             PDFKitView(url: note.fileURL)
         default:
             VStack {
-                Image(systemName: note.fileType.systemImage).font(.largeTitle)
+                Image(systemName: note.fileType.systemImage).font(.appLargeTitle)
                 Text("\(note.displayTitle)\n二进制文件，无法编辑")
                     .multilineTextAlignment(.center).foregroundColor(.secondary)
             }
@@ -249,8 +249,8 @@ struct ContentView: View {
                     Color(nsColor: .controlBackgroundColor)
                         .overlay {
                             VStack(spacing: 12) {
-                                Image(systemName: note.fileType.systemImage).font(.system(size: 36)).foregroundColor(.secondary)
-                                Text("\(note.displayTitle)").font(.headline)
+                                Image(systemName: note.fileType.systemImage).font(.appFont(size: 36)).foregroundColor(.secondary)
+                                Text("\(note.displayTitle)").font(.appHeadline)
                                 Text("此文件类型不可编辑").foregroundColor(.secondary)
                             }
                         }
@@ -291,7 +291,7 @@ struct ContentView: View {
                 Color(nsColor: .controlBackgroundColor)
                     .overlay {
                         VStack(spacing: 8) {
-                            Image(systemName: "eye").font(.system(size: 32)).foregroundColor(.secondary)
+                            Image(systemName: "eye").font(.appFont(size: 32)).foregroundColor(.secondary)
                             Text("选择一篇笔记以预览").foregroundColor(.secondary)
                         }
                     }
@@ -307,7 +307,7 @@ struct ContentView: View {
                 VStack(spacing: 16) {
                     ProgressView()
                     Text("正在编译 (第 \(compilePass.0)/\(compilePass.1) 轮)...")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.appCaption).foregroundColor(.secondary)
                     ProgressView(value: Double(compilePass.0), total: Double(compilePass.1))
                         .frame(width: 200)
                 }
@@ -323,10 +323,10 @@ struct ContentView: View {
                 )
             } else {
                 VStack(spacing: 12) {
-                    Image(systemName: "hammer").font(.system(size: 32)).foregroundColor(.secondary)
-                    Text("尚未编译").font(.headline).foregroundColor(.secondary)
+                    Image(systemName: "hammer").font(.appFont(size: 32)).foregroundColor(.secondary)
+                    Text("尚未编译").font(.appHeadline).foregroundColor(.secondary)
                     Text("Cmd+B 或点击工具栏编译按钮 (\(settings.latexCompiler.displayName))")
-                        .font(.caption).foregroundColor(.secondary)
+                        .font(.appCaption).foregroundColor(.secondary)
                     if !compileLog.isEmpty {
                         Divider()
                         ScrollView {
@@ -384,13 +384,13 @@ struct ContentView: View {
             // 侧边栏切换
             Button(action: { sidebarCollapsed.toggle() }) {
                 Image(systemName: "sidebar.left")
-                    .font(.body)
+                    .font(.appBody)
                     .foregroundColor(sidebarCollapsed ? .secondary : .accentColor)
             }
             .buttonStyle(.borderless)
             .help(sidebarCollapsed ? "显示目录栏 (Cmd+Shift+S)" : "隐藏目录栏 (Cmd+Shift+S)")
 
-            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
+            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.appCaption)
 
             Picker("", selection: $settings.editorLanguage) {
                 ForEach(EditorLanguage.allCases, id: \.self) { lang in
@@ -415,7 +415,7 @@ struct ContentView: View {
                     }
                 } label: {
                     Text(settings.latexCompiler.displayName)
-                        .font(.caption)
+                        .font(.appCaption)
                 }
                 .menuStyle(.borderlessButton).frame(width: 80)
                 .help("选择 LaTeX 编译器")
@@ -423,7 +423,7 @@ struct ContentView: View {
                 // 编译按钮
                 Button(action: { compileLatex() }) {
                     Image(systemName: "hammer")
-                        .font(.body)
+                        .font(.appBody)
                         .foregroundColor(isCompiling ? .orange : .accentColor)
                 }
                 .buttonStyle(.borderless).help("编译 LaTeX (Cmd+B)")
@@ -433,40 +433,40 @@ struct ContentView: View {
                 if !compileLog.isEmpty {
                     Button(action: { showCompileLog = true }) {
                         Image(systemName: compilePDFData != nil ? "checkmark.circle" : "exclamationmark.triangle")
-                            .font(.body)
+                            .font(.appBody)
                             .foregroundColor(compilePDFData != nil ? .green : .orange)
                     }
                     .buttonStyle(.borderless).help("查看编译日志")
                 }
             }
 
-            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
+            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.appCaption)
 
             ForEach(ViewMode.allCases, id: \.self) { mode in
                 Button(action: { settings.viewMode = mode }) {
                     Image(systemName: mode.systemImage)
-                        .font(.body)
+                        .font(.appBody)
                         .foregroundColor(settings.viewMode == mode ? .accentColor : .secondary)
                 }
                 .buttonStyle(.borderless).help(mode.displayName)
             }
 
-            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
+            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.appCaption)
 
             Text("\(Int(settings.fontSize))")
-                .font(.caption).foregroundColor(.secondary).frame(width: 18)
+                .font(.appCaption).foregroundColor(.secondary).frame(width: 18)
                 .help("Cmd+滚轮 调节字号")
 
             Spacer()
 
             Button(action: { showAIDrawer.toggle() }) {
                 Image(systemName: "sparkles")
-                    .font(.body)
+                    .font(.appBody)
                     .foregroundColor(showAIDrawer ? .accentColor : .secondary)
             }
             .buttonStyle(.borderless).help("AI 助手 (Cmd+Shift+I)")
 
-            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.caption)
+            Text("|").foregroundColor(.secondary.opacity(0.3)).font(.appCaption)
 
             Menu {
                 ForEach(ExportService.ExportFormat.allCases, id: \.self) { format in
@@ -475,7 +475,7 @@ struct ContentView: View {
                     }
                 }
             } label: {
-                Image(systemName: "square.and.arrow.up").font(.body)
+                Image(systemName: "square.and.arrow.up").font(.appBody)
             }
             .menuStyle(.borderlessButton).frame(width: 24).help("导出笔记")
         }
@@ -497,8 +497,8 @@ struct ContentView: View {
         Color(nsColor: .controlBackgroundColor)
             .overlay {
                 VStack(spacing: 16) {
-                    Image(systemName: "doc.text").font(.system(size: 48)).foregroundColor(.secondary)
-                    Text("ZenKith").font(.title2).foregroundColor(.secondary)
+                    Image(systemName: "doc.text").font(.appFont(size: 48)).foregroundColor(.secondary)
+                    Text("ZenKith").font(.appTitle2).foregroundColor(.secondary)
                     Text("在左侧创建一个新笔记开始写作\nCmd+N 快速新建")
                         .multilineTextAlignment(.center).foregroundColor(.secondary)
                 }
@@ -513,17 +513,17 @@ struct ContentView: View {
             .buttonStyle(.borderless).help(sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏")
 
             Image(systemName: note.fileType.systemImage)
-                .font(.caption2).foregroundColor(.secondary)
+                .font(.appCaption2).foregroundColor(.secondary)
 
-            Text(note.displayTitle).font(.caption).foregroundColor(.secondary).lineLimit(1)
+            Text(note.displayTitle).font(.appCaption).foregroundColor(.secondary).lineLimit(1)
 
             Spacer()
 
             if note.fileType.isEditable {
-                Text("字数: \(manager.editingContent.count)").font(.caption).foregroundColor(.secondary)
+                Text("字数: \(manager.editingContent.count)").font(.appCaption).foregroundColor(.secondary)
             }
             Text(note.modifiedDate.formatted(date: .abbreviated, time: .shortened))
-                .font(.caption).foregroundColor(.secondary)
+                .font(.appCaption).foregroundColor(.secondary)
         }
         .padding(.horizontal, 12).padding(.vertical, 4)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.8))

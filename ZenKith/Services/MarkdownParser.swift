@@ -302,7 +302,7 @@ final class MarkdownParser {
           }
         }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+          font-family: "Times New Roman", "Times", "STSongti-SC", "Songti SC", serif;
           font-size: 16px;
           line-height: 1.8;
           color: var(--text);

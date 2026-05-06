@@ -130,7 +130,7 @@ struct CompletionListView: View {
 
     private var emptyView: some View {
         Text("无匹配命令")
-            .font(.caption)
+            .font(.appCaption)
             .foregroundColor(.secondary)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -151,7 +151,7 @@ private struct CompletionRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(item.category.rawValue)
-                .font(.system(size: 9))
+                .font(.appFont(size: 9))
                 .foregroundColor(categoryColor(item.category))
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
@@ -167,7 +167,7 @@ private struct CompletionRow: View {
             Spacer()
 
             Text(item.detail)
-                .font(.system(size: 10))
+                .font(.appFont(size: 10))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
