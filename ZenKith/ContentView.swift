@@ -8,6 +8,7 @@ struct ContentView: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var manager: NotesManager
     @EnvironmentObject var aiViewModel: AIViewModel
+    @Environment(\.openWindow) var openWindow
 
     @State private var showAIDrawer = false
     @State private var aiDrawerWidth: CGFloat = 340
@@ -117,6 +118,9 @@ struct ContentView: View {
             if let url = notification.userInfo?["url"] as? URL {
                 settings.defaultDirectoryURL = url
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openPDFTranslation)) { _ in
+            openWindow(id: "pdfTranslation")
         }
         .sheet(isPresented: $showCompileLog) {
             VStack(spacing: 12) {

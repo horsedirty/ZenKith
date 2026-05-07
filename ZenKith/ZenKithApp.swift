@@ -33,6 +33,12 @@ struct ZenKithApp: App {
         .commands {
             commandMenus
         }
+
+        WindowGroup(id: "pdfTranslation") {
+            TranslationWindowView()
+        }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 1000, height: 700)
     }
 
     // MARK: - 菜单栏命令
@@ -49,6 +55,13 @@ struct ZenKithApp: App {
             Button("新建文件夹") {
                 manager.createFolder()
             }
+
+            Divider()
+
+            Button("PDF 翻译...") {
+                NotificationCenter.default.post(name: .openPDFTranslation, object: nil)
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
 
             Divider()
 
@@ -117,4 +130,5 @@ extension Notification.Name {
     static let toggleSidebar = Notification.Name("com.markflow.toggleSidebar")
     static let exportNote = Notification.Name("com.markflow.exportNote")
     static let directoryDidChange = Notification.Name("com.markflow.directoryDidChange")
+    static let openPDFTranslation = Notification.Name("com.markflow.openPDFTranslation")
 }
