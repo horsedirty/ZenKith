@@ -87,25 +87,13 @@ final class TencentTranslationService {
         let signedHeaders = "content-type;host"
         let hashedPayload = SHA256.hash(data: payloadData).hexString
         
-        let canonicalRequest = """
-        \(httpMethod)
-        \(canonicalURI)
-        \(canonicalQueryString)
-        \(canonicalHeaders)
-        \(signedHeaders)
-        \(hashedPayload)
-        """
+        let canonicalRequest = httpMethod + "\n" + canonicalURI + "\n" + canonicalQueryString + "\n" + canonicalHeaders + "\n" + signedHeaders + "\n" + hashedPayload
         
         // Step 2: String to Sign
         let credentialScope = "\(dateStamp)/\(service)/tc3_request"
         let hashedCanonicalRequest = SHA256.hash(data: Data(canonicalRequest.utf8)).hexString
         
-        let stringToSign = """
-        \(algorithm)
-        \(timestamp)
-        \(credentialScope)
-        \(hashedCanonicalRequest)
-        """
+        let stringToSign = algorithm + "\n" + timestamp + "\n" + credentialScope + "\n" + hashedCanonicalRequest
         
         // Step 3: Signature
         let signature = calculateSignature(stringToSign: stringToSign, dateStamp: dateStamp, service: service)
