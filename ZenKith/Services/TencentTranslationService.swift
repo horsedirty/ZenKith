@@ -5,7 +5,7 @@ final class TencentTranslationService {
     
     private struct TMTResponse: Decodable {
         struct Response: Decodable {
-            let TargetText: String
+            let TargetText: String?
             let Source: String?
             let Target: String?
             let RequestId: String?
@@ -116,7 +116,7 @@ final class TencentTranslationService {
         request.httpMethod = httpMethod
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(host, forHTTPHeaderField: "Host")
-        request.setValue("TMT-Swift-Client", forHTTPHeaderField: "X-TC-Action")
+        request.setValue(action, forHTTPHeaderField: "X-TC-Action")
         request.setValue(timestamp, forHTTPHeaderField: "X-TC-Timestamp")
         request.setValue(version, forHTTPHeaderField: "X-TC-Version")
         request.setValue(region, forHTTPHeaderField: "X-TC-Region")
@@ -126,23 +126,31 @@ final class TencentTranslationService {
         let (data, response) = try await session.data(for: request)
         
         if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
-            if let errorResponse = try? JSONDecoder().decode(TMTResponse.self, from: data) {
-                throw TMTError.apiError(errorResponse.Response.Error?.Message ?? "未知错误")
+            let body = String(data: data, encoding: .utf8) ?? ""
+            if let errorResponse = try? JSONDecoder().decode(TMTResponse.self, from: data),
+               let errMsg = errorResponse.Response.Error?.Message {
+                throw TMTError.apiError(errMsg)
             }
-            throw TMTError.requestFailed("HTTP \(httpResponse.statusCode)")
+            throw TMTError.requestFailed("HTTP \(httpResponse.statusCode): \(body.prefix(200))")
         }
-        
-        let decoded = try JSONDecoder().decode(TMTResponse.self, from: data)
+
+        let decoded: TMTResponse
+        do {
+            decoded = try JSONDecoder().decode(TMTResponse.self, from: data)
+        } catch {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw TMTError.requestFailed("解析响应失败: \(error.localizedDescription). Body: \(body.prefix(300))")
+        }
         
         if let apiError = decoded.Response.Error {
             throw TMTError.apiError(apiError.Message)
         }
         
-        guard !decoded.Response.TargetText.isEmpty else {
+        guard let targetText = decoded.Response.TargetText, !targetText.isEmpty else {
             throw TMTError.noData
         }
-        
-        return decoded.Response.TargetText
+
+        return targetText
     }
     
     func translateBatch(
