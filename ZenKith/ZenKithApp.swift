@@ -40,6 +40,11 @@ struct ZenKithApp: App {
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 1000, height: 700)
+
+        Settings {
+            SettingsView()
+                .environmentObject(settings)
+        }
     }
 
     // MARK: - 菜单栏命令
