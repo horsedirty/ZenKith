@@ -3,17 +3,35 @@ import Translation
 import UniformTypeIdentifiers
 
 struct TranslationWindowView: View {
+    @EnvironmentObject var settings: AppSettings
     @StateObject private var viewModel = PDFTranslationViewModel()
 
     var body: some View {
-        HSplitView {
+        NavigationSplitView {
             sidebarView
-                .frame(minWidth: 200, idealWidth: 220)
-
-            mainContentView
-                .frame(minWidth: 500)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 250)
+                .toolbar {
+                    ToolbarItem {
+                        Button {
+                            viewModel.showFileImporter = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .help("导入 PDF")
+                    }
+                }
+        } detail: {
+            if let document = viewModel.currentDocument {
+                TranslationCompareView(document: document, viewModel: viewModel)
+            } else {
+                ContentUnavailableView {
+                    Label("选择或导入 PDF", systemImage: "doc.text")
+                } description: {
+                    Text("从左侧选择已有文档，或点击 + 导入新的 PDF 文件")
+                }
+            }
         }
-        .frame(minWidth: 800, minHeight: 500)
+        .navigationTitle("PDF 翻译")
         .fileImporter(
             isPresented: $viewModel.showFileImporter,
             allowedContentTypes: [.pdf],
@@ -27,167 +45,78 @@ struct TranslationWindowView: View {
             }
         }
         .translationTask(viewModel.translationConfiguration) { session in
-            await viewModel.performTranslation(using: session)
+            await viewModel.performAppleTranslation(using: session)
         }
-        .alert("错误", isPresented: errorAlertBinding) {
+        .alert("错误", isPresented: errorBinding) {
             Button("确定") { viewModel.clearError() }
         } message: {
             if case .error(let msg) = viewModel.state { Text(msg) }
         }
         .onAppear {
+            viewModel.configure(with: settings)
             if viewModel.documents.isEmpty {
                 viewModel.showFileImporter = true
             }
         }
     }
 
-    // MARK: - Error Alert Binding
-
-    private var errorAlertBinding: Binding<Bool> {
-        Binding(
-            get: { if case .error = viewModel.state { return true }; return false },
-            set: { _ in viewModel.clearError() }
-        )
-    }
-
     // MARK: - Sidebar
 
     private var sidebarView: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("翻译文档")
-                    .font(.headline).foregroundColor(.secondary)
-                Spacer()
-                Menu {
-                    Button("导入 PDF...") {
-                        viewModel.showFileImporter = true
-                    }
-                } label: {
-                    Image(systemName: "plus").font(.title3)
-                }
-                .menuStyle(.borderlessButton)
-                .frame(width: 24)
-                .help("导入 PDF")
+        List(selection: Binding(
+            get: { viewModel.currentDocument?.id },
+            set: { id in
+                viewModel.currentDocument = viewModel.documents.first { $0.id == id }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-
-            Divider()
-
-            if viewModel.documents.isEmpty {
-                Spacer()
-                VStack(spacing: 8) {
-                    Image(systemName: "doc.text").font(.appFont(size: 28)).foregroundColor(.secondary)
-                    Text("暂无翻译文档").foregroundColor(.secondary).font(.callout)
-                }
-                Spacer()
-            } else {
-                List(selection: $viewModel.selectedDocumentId) {
-                    ForEach(viewModel.documents) { doc in
-                        documentRow(doc)
-                            .tag(doc.id)
+        )) {
+            ForEach(viewModel.documents) { document in
+                sidebarRow(document)
+                    .tag(document.id)
+                    .contextMenu {
+                        Button("删除", role: .destructive) {
+                            viewModel.deleteDocument(document)
+                        }
                     }
-                }
-                .listStyle(.sidebar)
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .listStyle(.sidebar)
     }
 
-    private func documentRow(_ doc: TranslationDocument) -> some View {
+    private func sidebarRow(_ doc: TranslationDocument) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(doc.fileName)
                 .font(.system(size: 12, weight: .medium))
                 .lineLimit(1)
 
             HStack(spacing: 4) {
-                Text("\(doc.totalPages) 页")
-                    .font(.system(size: 10)).foregroundColor(.secondary)
+                Text("\(doc.totalPages) 页 · \(doc.paragraphs.count) 段")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
 
                 if doc.isCompleted {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10)).foregroundColor(.green)
+                        .font(.system(size: 10))
+                        .foregroundColor(.green)
                 } else if doc.progress > 0 {
                     Text("\(Int(doc.progress * 100))%")
-                        .font(.system(size: 10)).foregroundColor(.orange)
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
                 } else {
                     Text("待翻译")
-                        .font(.system(size: 10)).foregroundColor(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
                 }
             }
         }
         .padding(.vertical, 2)
-        .contextMenu {
-            Button("删除", role: .destructive) {
-                viewModel.deleteDocument(doc.id)
-            }
-        }
     }
 
-    // MARK: - Main Content
+    // MARK: - Error Binding
 
-    @ViewBuilder
-    private var mainContentView: some View {
-        if let doc = viewModel.selectedDocument {
-            VStack(spacing: 0) {
-                // Toolbar
-                HStack {
-                    Text(doc.fileName)
-                        .font(.appHeadline)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    translateButton
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-
-                Divider()
-
-                TranslationCompareView(viewModel: viewModel)
-            }
-            .background(Color(nsColor: .textBackgroundColor))
-        } else {
-            VStack(spacing: 12) {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.appFont(size: 36)).foregroundColor(.secondary)
-                Text("选择左侧文档或导入新 PDF").foregroundColor(.secondary)
-                Button("导入 PDF") {
-                    viewModel.showFileImporter = true
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .textBackgroundColor))
-        }
-    }
-
-    @ViewBuilder
-    private var translateButton: some View {
-        if case .translating = viewModel.state {
-            ProgressView().controlSize(.small)
-        } else if viewModel.selectedDocument?.isCompleted == true {
-            Menu {
-                Button("重新翻译全部") {
-                    viewModel.startTranslation()
-                }
-            } label: {
-                Label("已完成", systemImage: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-            }
-            .menuStyle(.borderlessButton)
-            .frame(width: 90)
-        } else {
-            let hasFailed = viewModel.selectedDocument?.paragraphs.contains { $0.status == .failed } ?? false
-            Button {
-                if hasFailed {
-                    viewModel.retryFailed()
-                } else {
-                    viewModel.startTranslation()
-                }
-            } label: {
-                Label(hasFailed ? "重试" : "开始翻译", systemImage: hasFailed ? "arrow.clockwise" : "translate")
-            }
-        }
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { if case .error = viewModel.state { return true }; return false },
+            set: { _ in viewModel.clearError() }
+        )
     }
 }

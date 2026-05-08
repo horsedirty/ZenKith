@@ -1,7 +1,7 @@
 import SwiftUI
-import Translation
 
 struct TranslationCompareView: View {
+    let document: TranslationDocument
     @ObservedObject var viewModel: PDFTranslationViewModel
 
     @State private var selectedPage: Int? = nil
@@ -12,34 +12,27 @@ struct TranslationCompareView: View {
                 progressHeader
             }
 
-            if let doc = viewModel.selectedDocument, doc.totalPages > 1 {
-                pageSelector(totalPages: doc.totalPages)
+            if document.totalPages > 1 {
+                pageSelector(totalPages: document.totalPages)
             }
 
-            columnHeaders
+            Divider()
 
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(displayedParagraphs) { paragraph in
-                        ParagraphPairView(paragraph: paragraph)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 16)
+            TranslationCompareWebView(paragraphs: displayedParagraphs)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                translateButton
             }
-            .frame(maxWidth: .infinity)
         }
     }
 
-    // MARK: - Computed
-
     private var displayedParagraphs: [TranslationParagraph] {
-        let sorted = viewModel.sortedParagraphs
+        let sorted = document.paragraphs.sorted { ($0.pageIndex, $0.orderIndex) < ($1.pageIndex, $1.orderIndex) }
         guard let page = selectedPage else { return sorted }
         return sorted.filter { $0.pageIndex == page }
     }
-
-    // MARK: - Subviews
 
     private var progressHeader: some View {
         VStack(spacing: 4) {
@@ -51,7 +44,7 @@ struct TranslationCompareView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.8))
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.8))
     }
 
     private func pageSelector(totalPages: Int) -> some View {
@@ -88,19 +81,32 @@ struct TranslationCompareView: View {
         .buttonStyle(.plain)
     }
 
-    private var columnHeaders: some View {
-        HStack(spacing: 12) {
-            Text("原文")
-                .font(.caption).fontWeight(.semibold)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text("译文")
-                .font(.caption).fontWeight(.semibold)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+    @ViewBuilder
+    private var translateButton: some View {
+        if case .translating = viewModel.state {
+            ProgressView().controlSize(.small)
+        } else if document.isCompleted {
+            Menu {
+                Button("重新翻译全部") {
+                    viewModel.startTranslation(for: document)
+                }
+            } label: {
+                Label("已完成", systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 90)
+        } else {
+            let hasFailed = document.paragraphs.contains { $0.status == .failed }
+            Button {
+                if hasFailed {
+                    viewModel.retryFailed(for: document)
+                } else {
+                    viewModel.startTranslation(for: document)
+                }
+            } label: {
+                Label(hasFailed ? "重试" : "开始翻译", systemImage: hasFailed ? "arrow.clockwise" : "translate")
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
     }
 }

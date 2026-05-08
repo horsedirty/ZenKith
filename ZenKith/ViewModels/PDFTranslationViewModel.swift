@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import SwiftUI
 import Translation
 
 @MainActor
@@ -18,37 +17,29 @@ final class PDFTranslationViewModel: ObservableObject {
 
     @Published var state: State = .idle
     @Published var documents: [TranslationDocument] = []
-    @Published var selectedDocumentId: UUID?
+    @Published var currentDocument: TranslationDocument?
+    @Published var showFileImporter = false
     @Published var translationProgress: Double = 0
     @Published var translationConfiguration: TranslationSession.Configuration?
-    @Published var showFileImporter = false
 
     // MARK: - Dependencies
 
     private let parser = PDFParserService()
-    private let translationService = TranslationService()
+    private let storageURL: URL
+    private var settings: AppSettings?
 
-    private static let storageURL: URL = {
-        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = supportDir.appendingPathComponent("ZenKith")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("translationDocuments.json")
-    }()
+    // MARK: - Init
 
     init() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appDir = appSupport.appendingPathComponent("ZenKith", isDirectory: true)
+        self.storageURL = appDir.appendingPathComponent("translations", isDirectory: true)
+        try? FileManager.default.createDirectory(at: storageURL, withIntermediateDirectories: true)
         loadDocuments()
     }
 
-    // MARK: - Selected Document
-
-    var selectedDocument: TranslationDocument? {
-        guard let id = selectedDocumentId else { return nil }
-        return documents.first { $0.id == id }
-    }
-
-    var sortedParagraphs: [TranslationParagraph] {
-        guard let doc = selectedDocument else { return [] }
-        return doc.paragraphs.sorted { ($0.pageIndex, $0.orderIndex) < ($1.pageIndex, $1.orderIndex) }
+    func configure(with settings: AppSettings) {
+        self.settings = settings
     }
 
     // MARK: - Import PDF
@@ -60,143 +51,216 @@ final class PDFTranslationViewModel: ObservableObject {
             let result = try parser.parse(url: url)
             let fileName = url.lastPathComponent
 
-            var doc = TranslationDocument(fileName: fileName, totalPages: result.totalPages)
-            doc.paragraphs = result.paragraphs.map { p in
+            let paragraphs = result.paragraphs.map { p in
                 TranslationParagraph(
                     pageIndex: p.pageIndex,
                     orderIndex: p.orderIndex,
-                    originalText: p.text
+                    originalText: p.text,
+                    formatHint: p.formatHint
                 )
             }
 
-            documents.insert(doc, at: 0)
-            selectedDocumentId = doc.id
-            saveDocuments()
+            let document = TranslationDocument(
+                fileName: fileName,
+                totalPages: result.totalPages,
+                paragraphs: paragraphs
+            )
+
+            documents.insert(document, at: 0)
+            currentDocument = document
+            saveDocument(document)
             state = .idle
         } catch {
             state = .error(error.localizedDescription)
         }
     }
 
-    // MARK: - Translation
+    // MARK: - Start Translation (entry point)
 
-    func startTranslation() {
-        guard var doc = selectedDocument else { return }
-
-        let allDone = doc.paragraphs.allSatisfy { $0.status == .done }
-        if allDone {
-            // Reset for re-translation
-            for i in 0..<doc.paragraphs.count {
-                doc.paragraphs[i].status = .pending
-                doc.paragraphs[i].translatedText = nil
-            }
-            doc.isCompleted = false
-            updateDocument(doc)
-        }
-
-        translationConfiguration = TranslationService.defaultConfiguration
-    }
-
-    func performTranslation(using session: TranslationSession) async {
-        guard var doc = selectedDocument else {
-            translationConfiguration = nil
+    func startTranslation(for document: TranslationDocument) {
+        currentDocument = document
+        guard let settings = settings else {
+            state = .error("设置未准备好")
             return
         }
 
-        let pending = doc.paragraphs.filter { $0.status != .done }
-        guard !pending.isEmpty else {
-            doc.isCompleted = true
-            updateDocument(doc)
+        switch settings.translationEngine {
+        case .apple:
+            translationConfiguration = TranslationSession.Configuration(
+                source: nil,
+                target: Locale.Language(identifier: "zh-Hans")
+            )
+        case .tencent:
+            performTencentTranslation()
+        }
+    }
+
+    // MARK: - Apple Translation (via .translationTask)
+
+    func performAppleTranslation(using session: TranslationSession) async {
+        guard var document = currentDocument else { return }
+
+        let pendingIndices = document.paragraphs.indices.filter { document.paragraphs[$0].status != .done }
+
+        guard !pendingIndices.isEmpty else {
+            document.isCompleted = true
+            updateDocument(document)
             state = .completed
             translationConfiguration = nil
             return
         }
 
         state = .translating
-        translationProgress = doc.progress
+        translationProgress = document.progress
 
-        let totalCount = doc.paragraphs.count
-        var doneCount = doc.completedCount
+        let totalCount = document.paragraphs.count
+        var doneCount = document.paragraphs.filter { $0.status == .done }.count
+
+        let pendingParagraphs = pendingIndices.map { document.paragraphs[$0] }
 
         do {
-            try await translationService.translateBatch(
-                pending,
-                using: session
-            ) { [weak self] paragraph, translatedText in
-                guard let self = self else { return }
-
-                if var currentDoc = self.selectedDocument,
-                   let idx = currentDoc.paragraphs.firstIndex(where: { $0.id == paragraph.id }) {
-                    currentDoc.paragraphs[idx].translatedText = translatedText
-                    currentDoc.paragraphs[idx].status = .done
-                    doneCount += 1
-                    self.translationProgress = Double(doneCount) / Double(totalCount)
-                    self.updateDocument(currentDoc)
-                }
+            for (batchIndex, paragraph) in pendingParagraphs.enumerated() {
+                let response = try await session.translate(paragraph.originalText)
+                let originalIndex = pendingIndices[batchIndex]
+                document.paragraphs[originalIndex].translatedText = response.targetText
+                document.paragraphs[originalIndex].status = .done
+                doneCount += 1
+                self.translationProgress = Double(doneCount) / Double(totalCount)
+                self.currentDocument = document
             }
 
-            if var currentDoc = self.selectedDocument {
-                currentDoc.isCompleted = true
-                self.updateDocument(currentDoc)
-            }
+            document.isCompleted = true
+            updateDocument(document)
             state = .completed
         } catch {
-            saveDocuments()
-            state = .error("翻译中断: \(error.localizedDescription)")
+            updateDocument(document)
+            state = .error("Apple 翻译中断: \(error.localizedDescription)")
         }
 
         translationConfiguration = nil
     }
 
-    func retryFailed() {
-        guard var doc = selectedDocument else { return }
-        for i in 0..<doc.paragraphs.count where doc.paragraphs[i].status == .failed {
-            doc.paragraphs[i].status = .pending
+    // MARK: - Tencent Translation (direct API)
+
+    private func performTencentTranslation() {
+        guard let settings = settings else { return }
+
+        let secretId = settings.tencentSecretId
+        let secretKey = settings.tencentSecretKey
+
+        guard !secretId.isEmpty, !secretKey.isEmpty else {
+            state = .error("请先在设置中配置腾讯云 SecretId 和 SecretKey")
+            return
         }
-        updateDocument(doc)
-        startTranslation()
+
+        let source = settings.tencentSourceLanguage
+        let target = settings.tencentTargetLanguage
+
+        let service = TencentTranslationService(
+            secretId: secretId,
+            secretKey: secretKey,
+            source: source,
+            target: target
+        )
+
+        Task {
+            guard var document = self.currentDocument else { return }
+
+            let pendingIndices = document.paragraphs.indices.filter { document.paragraphs[$0].status != .done }
+
+            guard !pendingIndices.isEmpty else {
+                document.isCompleted = true
+                updateDocument(document)
+                state = .completed
+                return
+            }
+
+            state = .translating
+            translationProgress = document.progress
+
+            let totalCount = document.paragraphs.count
+            var doneCount = document.paragraphs.filter { $0.status == .done }.count
+
+            do {
+                for batchIndex in pendingIndices {
+                    let paragraph = document.paragraphs[batchIndex]
+                    let translated = try await service.translate(paragraph.originalText)
+                    document.paragraphs[batchIndex].translatedText = translated
+                    document.paragraphs[batchIndex].status = .done
+                    doneCount += 1
+                    self.translationProgress = Double(doneCount) / Double(totalCount)
+                    self.currentDocument = document
+                    self.updateDocument(document)
+                }
+
+                document.isCompleted = true
+                updateDocument(document)
+                state = .completed
+            } catch {
+                updateDocument(document)
+                state = .error("腾讯翻译失败: \(error.localizedDescription)")
+            }
+        }
     }
 
-    // MARK: - Document Management
+    // MARK: - Retry
 
-    func selectDocument(_ id: UUID) {
-        selectedDocumentId = id
-        state = .idle
+    func retryFailed(for document: TranslationDocument) {
+        guard let index = documents.firstIndex(where: { $0.id == document.id }) else { return }
+        for i in documents[index].paragraphs.indices {
+            if documents[index].paragraphs[i].status == .failed {
+                documents[index].paragraphs[i].status = .pending
+            }
+        }
+        currentDocument = documents[index]
+        saveDocument(documents[index])
+        startTranslation(for: documents[index])
     }
 
-    func deleteDocument(_ id: UUID) {
-        documents.removeAll { $0.id == id }
-        if selectedDocumentId == id {
-            selectedDocumentId = documents.first?.id
+    // MARK: - Delete
+
+    func deleteDocument(_ document: TranslationDocument) {
+        documents.removeAll { $0.id == document.id }
+        let fileURL = storageURL.appendingPathComponent("\(document.id.uuidString).json")
+        try? FileManager.default.removeItem(at: fileURL)
+        if currentDocument?.id == document.id {
+            currentDocument = nil
         }
-        saveDocuments()
+    }
+
+    // MARK: - Persistence
+
+    private func loadDocuments() {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: storageURL, includingPropertiesForKeys: nil) else { return }
+        let decoder = JSONDecoder()
+        documents = files
+            .filter { $0.pathExtension == "json" }
+            .compactMap { url in
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return try? decoder.decode(TranslationDocument.self, from: data)
+            }
+            .sorted { $0.importDate > $1.importDate }
+    }
+
+    private func saveDocument(_ document: TranslationDocument) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        guard let data = try? encoder.encode(document) else { return }
+        let fileURL = storageURL.appendingPathComponent("\(document.id.uuidString).json")
+        try? data.write(to: fileURL)
+    }
+
+    private func updateDocument(_ document: TranslationDocument) {
+        if let index = documents.firstIndex(where: { $0.id == document.id }) {
+            documents[index] = document
+        }
+        currentDocument = document
+        saveDocument(document)
     }
 
     func clearError() {
         if case .error = state {
             state = .idle
-        }
-    }
-
-    // MARK: - Private
-
-    private func updateDocument(_ document: TranslationDocument) {
-        guard let idx = documents.firstIndex(where: { $0.id == document.id }) else { return }
-        documents[idx] = document
-        saveDocuments()
-    }
-
-    private func saveDocuments() {
-        guard let data = try? JSONEncoder().encode(documents) else { return }
-        try? data.write(to: Self.storageURL, options: .atomic)
-    }
-
-    private func loadDocuments() {
-        guard let data = try? Data(contentsOf: Self.storageURL),
-              let loaded = try? JSONDecoder().decode([TranslationDocument].self, from: data) else { return }
-        documents = loaded
-        if selectedDocumentId == nil {
-            selectedDocumentId = documents.first?.id
         }
     }
 }

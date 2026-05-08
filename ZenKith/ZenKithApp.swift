@@ -36,6 +36,7 @@ struct ZenKithApp: App {
 
         WindowGroup(id: "pdfTranslation") {
             TranslationWindowView()
+                .environmentObject(settings)
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 1000, height: 700)
