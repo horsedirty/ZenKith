@@ -70,12 +70,14 @@ final class TencentTranslationService {
         let payloadData = try JSONSerialization.data(withJSONObject: payload)
         
         // Timestamps
+        let now = Date()
         let dateFormatter = DateFormatter()
         dateFormatter.timeZone = TimeZone(identifier: "UTC")
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        let dateStamp = dateFormatter.string(from: Date())
+        let dateStamp = dateFormatter.string(from: now)
         dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-        let timestamp = dateFormatter.string(from: Date())
+        let timestamp = dateFormatter.string(from: now)
+        let unixTimestamp = Int(now.timeIntervalSince1970)
         
         // Step 1: Canonical Request
         let httpMethod = "POST"
@@ -117,7 +119,7 @@ final class TencentTranslationService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(host, forHTTPHeaderField: "Host")
         request.setValue(action, forHTTPHeaderField: "X-TC-Action")
-        request.setValue(timestamp, forHTTPHeaderField: "X-TC-Timestamp")
+        request.setValue(String(unixTimestamp), forHTTPHeaderField: "X-TC-Timestamp")
         request.setValue(version, forHTTPHeaderField: "X-TC-Version")
         request.setValue(region, forHTTPHeaderField: "X-TC-Region")
         request.setValue(authorization, forHTTPHeaderField: "Authorization")
