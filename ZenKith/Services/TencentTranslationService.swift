@@ -150,6 +150,8 @@ final class TencentTranslationService {
         }
 
         if let apiError = decoded.Response.Error {
+            let currentYear = Calendar.current.component(.year, from: Date())
+            let clockWarning = currentYear > 2025 ? "\n\n⚠️ 您的系统时钟显示为 \(currentYear) 年，请检查系统日期是否正确。时钟偏差过大会导致 TC3 签名失败。" : ""
             let debugInfo = """
             CanonicalRequest:
             \(canonicalRequest)
@@ -164,6 +166,10 @@ final class TencentTranslationService {
             HTTP Headers:
             \(req.allHTTPHeaderFields?.map { "\($0): \($1)" }.joined(separator: "\n") ?? "none")
             Body: \(String(data: payloadData, encoding: .utf8) ?? "?")
+            ---
+            SelfTest:
+            \(Self.selfTestResult)
+            \(clockWarning)
             """
             throw TMTError.requestFailed("\(apiError.Message)\n\(debugInfo)")
         }
@@ -235,8 +241,12 @@ final class TencentTranslationService {
 
     // MARK: - Self Test (verifies HMAC/SHA256 against Tencent official test vector)
 
+    // MARK: - Self Test
+
+    private static var selfTestResult: String = "not run"
+
     private static func runSelfTest() {
-        let testSecretKey = "Gu5t9xGARNpq86cd98joQYCN3EXAMPLE"
+        let testSK = "Gu5t9xGARNpq86cd98joQYCN3EXAMPLE"
 
         func sha256Hex(_ d: Data) -> String {
             var h = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
@@ -255,22 +265,25 @@ final class TencentTranslationService {
         }
 
         let payload = "{\"Limit\": 1, \"Filters\": [{\"Values\": [\"\\u672a\\u547d\\u540d\"], \"Name\": \"instance-name\"}]}"
-        let payloadHash = sha256Hex(Data(payload.utf8))
+        let pHash = sha256Hex(Data(payload.utf8))
+        
+        let cr = "POST\n/\n\ncontent-type:application/json\nhost:cvm.tencentcloudapi.com\n\ncontent-type;host\n\(pHash)"
+        let hcr = sha256Hex(Data(cr.utf8))
+        
+        let sts = "TC3-HMAC-SHA256\n1551113065\n2019-02-25/cvm/tc3_request\n\(hcr)"
+        
+        let kDate = hmacRaw(key: Data("TC3\(testSK)".utf8), msg: Data("2019-02-25".utf8))
+        let kSvc  = hmacRaw(key: kDate, msg: Data("cvm".utf8))
+        let kSign = hmacRaw(key: kSvc, msg: Data("tc3_request".utf8))
+        let sig   = hmacRaw(key: kSign, msg: Data(sts.utf8)).map { String(format: "%02x", $0) }.joined()
 
-        let canonicalReq = "POST\n/\n\ncontent-type:application/json\nhost:cvm.tencentcloudapi.com\n\ncontent-type;host\n\(payloadHash)"
-        let hashedCR = sha256Hex(Data(canonicalReq.utf8))
-
-        let sts = "TC3-HMAC-SHA256\n1551113065\n2019-02-25/cvm/tc3_request\n\(hashedCR)"
-
-        let kDate  = hmacRaw(key: Data("TC3\(testSecretKey)".utf8), msg: Data("2019-02-25".utf8))
-        let kSvc   = hmacRaw(key: kDate, msg: Data("cvm".utf8))
-        let kSign  = hmacRaw(key: kSvc, msg: Data("tc3_request".utf8))
-        let sig    = hmacRaw(key: kSign, msg: Data(sts.utf8)).map { String(format: "%02x", $0) }.joined()
-
-        print("[TC3 SelfTest] payloadHash: \(payloadHash)")
-        print("[TC3 SelfTest] hashedCR:   \(hashedCR)")
-        print("[TC3 SelfTest] expected:   5ffe6a04c0664f34a8d476903fbe9a1a0ce595fc52823022bedfa1990de01e19")
-        print("[TC3 SelfTest] crMatch:    \(hashedCR == "5ffe6a04c0664f34a8d476903fbe9a1a0ce595fc52823022bedfa1990de01e19")")
-        print("[TC3 SelfTest] signature:  \(sig)")
+        let expHCR = "5ffe6a04c0664f34a8d476903fbe9a1a0ce595fc52823022bedfa1990de01e19"
+        selfTestResult = """
+        payloadHash: \(pHash)
+        hashedCR:    \(hcr)
+        expected:    \(expHCR)
+        crMatch:     \(hcr == expHCR)
+        signature:   \(sig)
+        """
     }
 }
