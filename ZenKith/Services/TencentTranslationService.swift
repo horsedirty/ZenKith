@@ -1,5 +1,5 @@
 import Foundation
-import CryptoKit
+import CommonCrypto
 
 final class TencentTranslationService {
 
@@ -56,7 +56,6 @@ final class TencentTranslationService {
 
         let service = "tmt"
         let host = "tmt.tencentcloudapi.com"
-        let endpoint = "https://tmt.tencentcloudapi.com"
         let action = "TextTranslate"
         let version = "2018-03-21"
         let algorithm = "TC3-HMAC-SHA256"
@@ -69,7 +68,7 @@ final class TencentTranslationService {
             "ProjectId": 0
         ]
         let payloadData = try JSONSerialization.data(withJSONObject: payloadDict, options: .sortedKeys)
-        let payloadHash = hexString(SHA256.hash(data: payloadData))
+        let payloadHash = sha256Hex(payloadData)
 
         // Timestamps
         let now = Date()
@@ -82,7 +81,7 @@ final class TencentTranslationService {
         let timestampStr = fmt.string(from: now)
         let unixTimestamp = Int(now.timeIntervalSince1970)
 
-        // Step 1 — Canonical Request
+        // Step 1: Canonical Request
         let httpMethod = "POST"
         let canonicalURI = "/"
         let canonicalQueryString = ""
@@ -96,55 +95,51 @@ final class TencentTranslationService {
             + signedHeaders + "\n"
             + payloadHash
 
-        let hashedCanonicalRequest = hexString(SHA256.hash(data: Data(canonicalRequest.utf8)))
+        let hashedCanonicalRequest = sha256Hex(Data(canonicalRequest.utf8))
 
-        // Step 2 — String to Sign
+        // Step 2: String to Sign
         let credentialScope = "\(dateStamp)/\(service)/tc3_request"
-
         let stringToSign = algorithm + "\n"
             + timestampStr + "\n"
             + credentialScope + "\n"
             + hashedCanonicalRequest
 
-        // Step 3 — Derive signing key
-        let kDate = hmacSHA256(key: Data("TC3\(secretKey)".utf8), data: Data(dateStamp.utf8))
-        let kService = hmacSHA256(key: kDate, data: Data(service.utf8))
-        let kSigning = hmacSHA256(key: kService, data: Data("tc3_request".utf8))
+        // Step 3: Signing key derivation
+        let kDate    = hmacSHA256(key: "TC3\(secretKey)", data: dateStamp)
+        let kService = hmacSHA256(key: kDate, data: service)
+        let kSigning = hmacSHA256(key: kService, data: "tc3_request")
 
-        // Step 4 — Signature
-        let signatureData = hmacSHA256(key: kSigning, data: Data(stringToSign.utf8))
-        let signature = hexString(signatureData)
+        // Step 4: Signature
+        let signature = hmacSHA256Hex(key: kSigning, data: stringToSign)
 
-        // Step 5 — Authorization header
-        let authorization = "\(algorithm) Credential=\(secretId)/\(credentialScope), SignedHeaders=\(signedHeaders), Signature=\(signature)"
+        // Step 5: Authorization
+        let auth = "\(algorithm) Credential=\(secretId)/\(credentialScope), SignedHeaders=\(signedHeaders), Signature=\(signature)"
 
-        // Build HTTP request
-        var request = URLRequest(url: URL(string: endpoint)!)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(host, forHTTPHeaderField: "Host")
-        request.setValue(action, forHTTPHeaderField: "X-TC-Action")
-        request.setValue(String(unixTimestamp), forHTTPHeaderField: "X-TC-Timestamp")
-        request.setValue(version, forHTTPHeaderField: "X-TC-Version")
-        request.setValue("ap-guangzhou", forHTTPHeaderField: "X-TC-Region")
-        request.setValue(authorization, forHTTPHeaderField: "Authorization")
-        request.httpBody = payloadData
+        // Build request
+        var req = URLRequest(url: URL(string: "https://\(host)")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(host, forHTTPHeaderField: "Host")
+        req.setValue(action, forHTTPHeaderField: "X-TC-Action")
+        req.setValue(String(unixTimestamp), forHTTPHeaderField: "X-TC-Timestamp")
+        req.setValue(version, forHTTPHeaderField: "X-TC-Version")
+        req.setValue("ap-guangzhou", forHTTPHeaderField: "X-TC-Region")
+        req.setValue(auth, forHTTPHeaderField: "Authorization")
+        req.httpBody = payloadData
 
-        // Execute
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TMTError.requestFailed("无效的响应")
-        }
-
+        let (data, resp) = try await session.data(for: req)
         let body = String(data: data, encoding: .utf8) ?? ""
 
-        if httpResponse.statusCode != 200 {
+        guard let httpResp = resp as? HTTPURLResponse else {
+            throw TMTError.requestFailed("无效响应")
+        }
+
+        if httpResp.statusCode != 200 {
             if let err = try? JSONDecoder().decode(TMTResponse.self, from: data),
                let msg = err.Response.Error?.Message {
                 throw TMTError.apiError(msg)
             }
-            throw TMTError.requestFailed("HTTP \(httpResponse.statusCode): \(body)")
+            throw TMTError.requestFailed("HTTP \(httpResp.statusCode): \(body)")
         }
 
         let decoded: TMTResponse
@@ -163,14 +158,19 @@ final class TencentTranslationService {
             \(stringToSign)
 
             Signature: \(signature)
+            SecretId: \(secretId.prefix(8))...
+            SecretKey len: \(secretKey.count)
+            ---
+            HTTP Headers:
+            \(req.allHTTPHeaderFields?.map { "\($0): \($1)" }.joined(separator: "\n") ?? "none")
+            Body: \(String(data: payloadData, encoding: .utf8) ?? "?")
             """
-            throw TMTError.requestFailed("\(apiError.Message)\n\n调试信息:\n\(debugInfo)")
+            throw TMTError.requestFailed("\(apiError.Message)\n\(debugInfo)")
         }
 
         guard let targetText = decoded.Response.TargetText, !targetText.isEmpty else {
             throw TMTError.noData
         }
-
         return targetText
     }
 
@@ -180,33 +180,56 @@ final class TencentTranslationService {
     ) async throws -> [String] {
         var results: [String] = []
         results.reserveCapacity(texts.count)
-
         for (index, text) in texts.enumerated() {
-            let translated = try await translate(text)
-            results.append(translated)
+            let t = try await translate(text)
+            results.append(t)
             onProgress(index)
-
             if index < texts.count - 1 {
                 try await Task.sleep(nanoseconds: 250_000_000)
             }
         }
-
         return results
     }
 
-    // MARK: - HMAC
+    // MARK: - Crypto (CommonCrypto)
 
-    private func hmacSHA256(key: Data, data: Data) -> Data {
-        let symmetricKey = SymmetricKey(data: key)
-        let code = HMAC<SHA256>.authenticationCode(for: data, using: symmetricKey)
-        return Data(code)
+    private func sha256Hex(_ data: Data) -> String {
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        data.withUnsafeBytes { _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash) }
+        return hash.map { String(format: "%02x", $0) }.joined()
     }
 
-    private func hexString(_ digest: SHA256.Digest) -> String {
-        digest.map { String(format: "%02x", $0) }.joined()
+    private func hmacSHA256(key: String, data: String) -> Data {
+        let keyData = Data(key.utf8)
+        let dataBytes = Data(data.utf8)
+        var result = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        keyData.withUnsafeBytes { kPtr in
+            dataBytes.withUnsafeBytes { dPtr in
+                CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256),
+                       kPtr.baseAddress, keyData.count,
+                       dPtr.baseAddress, dataBytes.count,
+                       &result)
+            }
+        }
+        return Data(result)
     }
 
-    private func hexString(_ data: Data) -> String {
-        data.map { String(format: "%02x", $0) }.joined()
+    private func hmacSHA256(key: Data, data: String) -> Data {
+        let dataBytes = Data(data.utf8)
+        var result = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        key.withUnsafeBytes { kPtr in
+            dataBytes.withUnsafeBytes { dPtr in
+                CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256),
+                       kPtr.baseAddress, key.count,
+                       dPtr.baseAddress, dataBytes.count,
+                       &result)
+            }
+        }
+        return Data(result)
+    }
+
+    private func hmacSHA256Hex(key: Data, data: String) -> String {
+        let hmacData = hmacSHA256(key: key, data: data)
+        return hmacData.map { String(format: "%02x", $0) }.joined()
     }
 }
