@@ -47,6 +47,7 @@ final class TencentTranslationService {
         self.sourceLanguage = source
         self.targetLanguage = target
         self.session = URLSession(configuration: .ephemeral)
+        Self.runSelfTest()
     }
 
     func translate(_ text: String) async throws -> String {
@@ -85,8 +86,8 @@ final class TencentTranslationService {
         let httpMethod = "POST"
         let canonicalURI = "/"
         let canonicalQueryString = ""
-        let canonicalHeaders = "content-type:application/json\nhost:\(host)\n"
-        let signedHeaders = "content-type;host"
+        let canonicalHeaders = "content-type:application/json\n"
+        let signedHeaders = "content-type"
 
         let canonicalRequest = httpMethod + "\n"
             + canonicalURI + "\n"
@@ -119,7 +120,6 @@ final class TencentTranslationService {
         var req = URLRequest(url: URL(string: "https://\(host)")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(host, forHTTPHeaderField: "Host")
         req.setValue(action, forHTTPHeaderField: "X-TC-Action")
         req.setValue(String(unixTimestamp), forHTTPHeaderField: "X-TC-Timestamp")
         req.setValue(version, forHTTPHeaderField: "X-TC-Version")
@@ -231,5 +231,46 @@ final class TencentTranslationService {
     private func hmacSHA256Hex(key: Data, data: String) -> String {
         let hmacData = hmacSHA256(key: key, data: data)
         return hmacData.map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Self Test (verifies HMAC/SHA256 against Tencent official test vector)
+
+    private static func runSelfTest() {
+        let testSecretKey = "Gu5t9xGARNpq86cd98joQYCN3EXAMPLE"
+
+        func sha256Hex(_ d: Data) -> String {
+            var h = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+            d.withUnsafeBytes { _ = CC_SHA256($0.baseAddress, CC_LONG(d.count), &h) }
+            return h.map { String(format: "%02x", $0) }.joined()
+        }
+        func hmacRaw(key: Data, msg: Data) -> Data {
+            var r = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+            key.withUnsafeBytes { kPtr in
+                msg.withUnsafeBytes { mPtr in
+                    CCHmac(CCHmacAlgorithm(kCCHmacAlgSHA256),
+                           kPtr.baseAddress, key.count, mPtr.baseAddress, msg.count, &r)
+                }
+            }
+            return Data(r)
+        }
+
+        let payload = "{\"Limit\": 1, \"Filters\": [{\"Values\": [\"\\u672a\\u547d\\u540d\"], \"Name\": \"instance-name\"}]}"
+        let payloadHash = sha256Hex(Data(payload.utf8))
+
+        let canonicalReq = "POST\n/\n\ncontent-type:application/json\nhost:cvm.tencentcloudapi.com\n\ncontent-type;host\n\(payloadHash)"
+        let hashedCR = sha256Hex(Data(canonicalReq.utf8))
+
+        let sts = "TC3-HMAC-SHA256\n1551113065\n2019-02-25/cvm/tc3_request\n\(hashedCR)"
+
+        let kDate  = hmacRaw(key: Data("TC3\(testSecretKey)".utf8), msg: Data("2019-02-25".utf8))
+        let kSvc   = hmacRaw(key: kDate, msg: Data("cvm".utf8))
+        let kSign  = hmacRaw(key: kSvc, msg: Data("tc3_request".utf8))
+        let sig    = hmacRaw(key: kSign, msg: Data(sts.utf8)).map { String(format: "%02x", $0) }.joined()
+
+        print("[TC3 SelfTest] payloadHash: \(payloadHash)")
+        print("[TC3 SelfTest] hashedCR:   \(hashedCR)")
+        print("[TC3 SelfTest] expected:   5ffe6a04c0664f34a8d476903fbe9a1a0ce595fc52823022bedfa1990de01e19")
+        print("[TC3 SelfTest] crMatch:    \(hashedCR == "5ffe6a04c0664f34a8d476903fbe9a1a0ce595fc52823022bedfa1990de01e19")")
+        print("[TC3 SelfTest] signature:  \(sig)")
     }
 }
