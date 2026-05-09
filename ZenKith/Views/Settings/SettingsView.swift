@@ -67,12 +67,8 @@ struct TranslationSettingsView: View {
                         .textContentType(.username)
 
                     SecureField("SecretKey", text: $secretKeyInput)
-                        .onSubmit {
-                            settings.tencentSecretKey = secretKeyInput
-                        }
-                        .onAppear {
-                            secretKeyInput = settings.tencentSecretKey
-                        }
+                        .onChange(of: secretKeyInput) { _, newValue in settings.tencentSecretKey = newValue }
+                        .onAppear { secretKeyInput = settings.tencentSecretKey }
                 }
 
                 Section("语言设置") {
