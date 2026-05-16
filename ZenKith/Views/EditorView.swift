@@ -135,6 +135,7 @@ struct EditorView: NSViewRepresentable {
         fileprivate weak var textView: NSTextView?
         fileprivate weak var scrollView: NSScrollView?
         fileprivate weak var rulerView: LineNumberRulerView?
+        fileprivate var lineHighlightLayer: CAShapeLayer?
         
         let completionEngine = LatexCompletionEngine()
         fileprivate var completionPopover: CompletionPopover?
@@ -147,6 +148,15 @@ struct EditorView: NSViewRepresentable {
         init(text: Binding<String>, language: EditorLanguage) {
             self._text = text
             self.language = language
+            super.init()
+
+            NotificationCenter.default.addObserver(
+                forName: .scrollToLine,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                self?.handleScrollToLine(notification)
+            }
         }
         
         // MARK: - Syntax Highlighting Setup
@@ -349,6 +359,55 @@ struct EditorView: NSViewRepresentable {
                 if text.character(at: i) == Character("\n").utf16.first! { lineCount += 1 }
             }
             return NSRect(x: 0, y: CGFloat(lineCount - 1) * lineHeight, width: 0, height: lineHeight)
+        }
+
+        // MARK: - Scroll to Line
+
+        @objc private func handleScrollToLine(_ notification: Notification) {
+            guard let lineNumber = notification.userInfo?["line"] as? Int,
+                  let tv = textView else { return }
+
+            let text = tv.string as NSString
+            let lines = text.components(separatedBy: "\n")
+            var charCount = 0
+            for i in 0..<min(lineNumber - 1, lines.count) {
+                charCount += lines[i].count + 1
+            }
+            let loc = min(charCount, text.length)
+            let range = NSRange(location: loc, length: 0)
+            tv.scrollRangeToVisible(range)
+            tv.setSelectedRange(range)
+            tv.window?.makeFirstResponder(tv)
+
+            highlightLine(lineNumber)
+        }
+
+        private func highlightLine(_ lineNumber: Int) {
+            guard let tv = textView else { return }
+            lineHighlightLayer?.removeFromSuperlayer()
+
+            let text = tv.string as NSString
+            let lines = text.components(separatedBy: "\n")
+            var charCount = 0
+            for i in 0..<min(lineNumber - 1, lines.count) {
+                charCount += lines[i].count + 1
+            }
+            let loc = min(charCount, text.length)
+            let range = NSRange(location: loc, length: 0)
+
+            let rect = tv.firstRect(forCharacterRange: range, actualRange: nil)
+            guard rect != .zero else { return }
+
+            let layer = CAShapeLayer()
+            layer.fillColor = NSColor.systemYellow.withAlphaComponent(0.2).cgColor
+            let lineRect = NSRect(x: 0, y: rect.origin.y, width: tv.bounds.width, height: rect.height)
+            layer.path = CGPath(rect: lineRect, transform: nil)
+            tv.enclosingScrollView?.documentView?.layer?.addSublayer(layer)
+            self.lineHighlightLayer = layer
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak layer] in
+                layer?.removeFromSuperlayer()
+            }
         }
     }
 }

@@ -11,3 +11,7 @@ struct PersistenceKeys {
     static let aiConfig = "com.markflow.aiConfig"
     static let keychainService = "com.markflow.zenkith"
 }
+
+extension Notification.Name {
+    static let scrollToLine = Notification.Name("ZenKith.scrollToLine")
+}
