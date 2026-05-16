@@ -124,6 +124,11 @@ struct EditorView: NSViewRepresentable {
             context.coordinator.applyFullHighlightIfNeeded(to: tv)
         }
         
+        // 任何重绘时 LaTeX 模式下强制刷新全量高亮，防止默认属性覆盖
+        if language == .latex {
+            context.coordinator.applyFullHighlightIfNeeded(to: tv)
+        }
+        
         context.coordinator.language = language
     }
     
