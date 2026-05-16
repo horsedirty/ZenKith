@@ -198,6 +198,18 @@ struct EditorView: NSViewRepresentable {
             ) { [weak self] notification in
                 self?.handleScrollToLine(notification)
             }
+
+            NotificationCenter.default.addObserver(
+                forName: .bibKeysDidUpdate,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                if let keys = notification.userInfo?["keys"] as? [String] {
+                    Task { @MainActor [weak self] in
+                        self?.completionEngine.setCiteKeys(keys)
+                    }
+                }
+            }
         }
         
         // MARK: - Syntax Highlighting Setup

@@ -371,4 +371,23 @@ final class LatexService {
         }
         return -1
     }
+
+    static func synctexQuery(pdfURL: URL, page: Int, x: Double, y: Double) -> Int? {
+        let task = Process()
+        task.launchPath = "/usr/bin/env"
+        task.arguments = ["synctex", "edit", "-o", "\(page):\(Int(x)):\(Int(y)):\(pdfURL.path)"]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+        do { try task.run(); task.waitUntilExit() } catch { return nil }
+        guard let data = try? pipe.fileHandleForReading.readToEnd(),
+              let output = String(data: data, encoding: .utf8) else { return nil }
+        if let fileLine = output.components(separatedBy: "\n")
+            .first(where: { $0.starts(with: "File:") }),
+           let lineStr = fileLine.components(separatedBy: ":").dropFirst().first?.trimmingCharacters(in: .whitespaces),
+           let line = Int(lineStr) {
+            return line
+        }
+        return nil
+    }
 }

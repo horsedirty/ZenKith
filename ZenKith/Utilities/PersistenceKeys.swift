@@ -16,4 +16,5 @@ extension Notification.Name {
     static let scrollToLine = Notification.Name("ZenKith.scrollToLine")
     static let sendCompileErrorsToAI = Notification.Name("ZenKith.sendCompileErrorsToAI")
     static let sendSelectionToAI = Notification.Name("ZenKith.sendSelectionToAI")
+    static let bibKeysDidUpdate = Notification.Name("ZenKith.bibKeysDidUpdate")
 }

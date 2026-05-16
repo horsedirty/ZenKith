@@ -10,6 +10,8 @@ struct ContentView: View {
     @EnvironmentObject var aiViewModel: AIViewModel
     @Environment(\.openWindow) var openWindow
 
+    @StateObject private var bibManager = BibManager()
+
     @State private var showAIDrawer = false
     @State private var aiDrawerWidth: CGFloat = 340
     @State private var selectedText: String = ""
@@ -23,6 +25,7 @@ struct ContentView: View {
     @State private var compilePDFData: Data?
     @State private var showCompileLog = false
     @State private var showOutlinePanel = true
+    @State private var leftPanelTab = 0
 
     // 编译缓存：texURL → (PDF data, 源码hash)
     @State private var compileCache: [URL: (data: Data, hash: Int)] = [:]
@@ -52,7 +55,34 @@ struct ContentView: View {
 
     @ViewBuilder
     private var baseView: some View {
-        Group {
+        contentWithLayout
+            .toolbar { ToolbarItemGroup { toolbarContent } }
+            .onAppear {
+                aiViewModel.setNoteContentProvider { [manager] in
+                    guard let note = manager.selectedNote else { return nil }
+                    return (manager.editingContent, note.displayTitle)
+                }
+                startScrollMonitor()
+            }
+            .onDisappear { stopScrollMonitor() }
+            .onChange(of: manager.editingContent) {
+                DispatchQueue.main.async { manager.scheduleAutoSave() }
+            }
+            .onChange(of: bibManager.allKeys) { newKeys in
+                NotificationCenter.default.post(
+                    name: .bibKeysDidUpdate,
+                    object: nil,
+                    userInfo: ["keys": newKeys]
+                )
+            }
+            .onChange(of: manager.selectedNote) { _, newNote in
+                onNoteChanged(newNote)
+            }
+    }
+
+    @ViewBuilder
+    private var contentWithLayout: some View {
+        let main = Group {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     if !sidebarCollapsed {
@@ -76,71 +106,70 @@ struct ContentView: View {
                 }
             }
         }
-        .toolbar { ToolbarItemGroup { toolbarContent } }
-        .onAppear {
-            aiViewModel.setNoteContentProvider { [manager] in
-                guard let note = manager.selectedNote else { return nil }
-                return (manager.editingContent, note.displayTitle)
+        main
+            .background(keyboardShortcutButton(KeyEquivalent("i"), modifiers: [.command, .shift]) { showAIDrawer.toggle() })
+            .background(keyboardShortcutButton(KeyEquivalent("l"), modifiers: [.command, .shift]) { cycleViewMode() })
+            .background(keyboardShortcutButton(KeyEquivalent("b"), modifiers: [.command]) { compileLatex() })
+            .background(keyboardShortcutButton(KeyEquivalent("s"), modifiers: [.command, .shift]) { sidebarCollapsed.toggle() })
+            .onReceive(NotificationCenter.default.publisher(for: .toggleAIDrawer)) { _ in
+                showAIDrawer.toggle()
             }
-            startScrollMonitor()
-        }
-        .onDisappear { stopScrollMonitor() }
-        .onChange(of: manager.editingContent) {
-            DispatchQueue.main.async { manager.scheduleAutoSave() }
-        }
-        .onChange(of: manager.selectedNote) { _, newNote in
-            if let note = newNote {
-                let ext = note.fileURL.pathExtension.lowercased()
-                if ext == "tex" || ext == "ltx" {
-                    settings.editorLanguage = .latex
-                    if let cached = compileCache[note.fileURL] {
-                        compilePDFData = cached.data
-                        if cachedPDFSourceURL != note.fileURL {
-                            cachedPDFDocument = PDFDocument(data: cached.data)
-                            cachedPDFSourceURL = note.fileURL
-                        }
-                        compileLog = ""
-                    } else {
-                        compilePDFData = nil
-                        cachedPDFDocument = nil
-                        cachedPDFSourceURL = nil
-                        compileLog = ""
-                    }
-                } else if ext == "md" {
-                    settings.editorLanguage = .markdown
-                    compilePDFData = nil
-                    cachedPDFDocument = nil
-                    cachedPDFSourceURL = nil
-                    compileLog = ""
+            .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
+                sidebarCollapsed.toggle()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .exportNote)) { notification in
+                if let format = notification.userInfo?["format"] as? ExportService.ExportFormat {
+                    exportNote(format: format)
                 }
             }
-        }
-        .background(Button("") { showAIDrawer.toggle() }
-            .keyboardShortcut("i", modifiers: [.command, .shift]).opacity(0))
-        .background(Button("") { cycleViewMode() }
-            .keyboardShortcut("l", modifiers: [.command, .shift]).opacity(0))
-        .background(Button("") { compileLatex() }
-            .keyboardShortcut("b", modifiers: [.command]).opacity(0))
-        .background(Button("") { sidebarCollapsed.toggle() }
-            .keyboardShortcut("s", modifiers: [.command, .shift]).opacity(0))
-        .onReceive(NotificationCenter.default.publisher(for: .toggleAIDrawer)) { _ in
-            showAIDrawer.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
-            sidebarCollapsed.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .exportNote)) { notification in
-            if let format = notification.userInfo?["format"] as? ExportService.ExportFormat {
-                exportNote(format: format)
+            .onReceive(NotificationCenter.default.publisher(for: .directoryDidChange)) { notification in
+                if let url = notification.userInfo?["url"] as? URL {
+                    settings.defaultDirectoryURL = url
+                }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .directoryDidChange)) { notification in
-            if let url = notification.userInfo?["url"] as? URL {
-                settings.defaultDirectoryURL = url
+            .onReceive(NotificationCenter.default.publisher(for: .openPDFTranslation)) { _ in
+                openWindow(id: "pdfTranslation")
             }
+    }
+
+    private func keyboardShortcutButton(_ key: KeyEquivalent, modifiers: EventModifiers, action: @escaping () -> Void) -> some View {
+        Button("") { action() }
+            .keyboardShortcut(key, modifiers: modifiers)
+            .opacity(0)
+    }
+
+    private func onNoteChanged(_ note: NoteFile?) {
+        guard let note = note else { return }
+        let ext = note.fileURL.pathExtension.lowercased()
+        if ext == "tex" || ext == "ltx" {
+            settings.editorLanguage = .latex
+            if let cached = compileCache[note.fileURL] {
+                compilePDFData = cached.data
+                if cachedPDFSourceURL != note.fileURL {
+                    cachedPDFDocument = PDFDocument(data: cached.data)
+                    cachedPDFSourceURL = note.fileURL
+                }
+                compileLog = ""
+            } else {
+                compilePDFData = nil
+                cachedPDFDocument = nil
+                cachedPDFSourceURL = nil
+                compileLog = ""
+            }
+        } else if ext == "md" {
+            settings.editorLanguage = .markdown
+            compilePDFData = nil
+            cachedPDFDocument = nil
+            cachedPDFSourceURL = nil
+            compileLog = ""
         }
-        .onReceive(NotificationCenter.default.publisher(for: .openPDFTranslation)) { _ in
-            openWindow(id: "pdfTranslation")
+        DispatchQueue.main.async {
+            bibManager.loadBibFiles(from: note.fileURL.deletingLastPathComponent())
+            NotificationCenter.default.post(
+                name: .bibKeysDidUpdate,
+                object: nil,
+                userInfo: ["keys": bibManager.allKeys]
+            )
         }
     }
 
@@ -232,7 +261,7 @@ struct ContentView: View {
                 VStack { Image(systemName: "photo").font(.appLargeTitle); Text("无法加载图片") }
             }
         case .pdfDoc:
-            PDFKitView(url: note.fileURL)
+            PDFKitView(url: note.fileURL, onPDFClick: nil)
         default:
             VStack {
                 Image(systemName: note.fileType.systemImage).font(.appLargeTitle)
@@ -278,13 +307,28 @@ struct ContentView: View {
     }
 
     private var latexOutlinePanel: some View {
-        let outlineItems = LatexOutliner.parse(manager.editingContent)
-        return OutlinePanelView(items: outlineItems) { lineNumber in
-            NotificationCenter.default.post(
-                name: .scrollToLine,
-                object: nil,
-                userInfo: ["line": lineNumber]
-            )
+        VStack(spacing: 0) {
+            Picker("", selection: $leftPanelTab) {
+                Text("大纲").tag(0)
+                Text("文献").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding(4)
+
+            if leftPanelTab == 0 {
+                let outlineItems = LatexOutliner.parse(manager.editingContent)
+                OutlinePanelView(items: outlineItems) { lineNumber in
+                    NotificationCenter.default.post(
+                        name: .scrollToLine,
+                        object: nil,
+                        userInfo: ["line": lineNumber]
+                    )
+                }
+            } else {
+                BibManagerView(bibManager: bibManager) { citeKey in
+                    manager.editingContent += "\\cite{\(citeKey)}"
+                }
+            }
         }
         .frame(width: 220)
     }
@@ -302,7 +346,7 @@ struct ContentView: View {
                         Image(nsImage: nsImage).resizable().aspectRatio(contentMode: .fit).padding()
                     }
                 case .pdfDoc:
-                    PDFKitView(url: note.fileURL)
+                    PDFKitView(url: note.fileURL, onPDFClick: nil)
                 case .logAux:
                     ScrollView { Text(manager.editingContent).font(.system(size: 11, design: .monospaced)).padding() }
                         .background(Color(nsColor: .textBackgroundColor))
@@ -340,7 +384,7 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let document = cachedPDFDocument {
-                PDFKitView(document: document)
+                PDFKitView(document: document, onPDFClick: handlePDFClick)
             } else if LatexService.detectInstalledCompilers().isEmpty {
                 // 无本地编译器，使用 WebView + MathJax 回退渲染
                 LatexPreviewView(
@@ -401,6 +445,20 @@ struct ContentView: View {
                 cachedPDFDocument = PDFDocument(data: pdfData)
                 cachedPDFSourceURL = texURL
             }
+        }
+    }
+
+    // MARK: - SyncTeX 反向搜索
+
+    private func handlePDFClick(page: Int, x: Double, y: Double) {
+        guard let note = manager.selectedNote else { return }
+        let pdfURL = note.fileURL.deletingPathExtension().appendingPathExtension("pdf")
+        if let line = LatexService.synctexQuery(pdfURL: pdfURL, page: page, x: x, y: y) {
+            NotificationCenter.default.post(
+                name: .scrollToLine,
+                object: nil,
+                userInfo: ["line": line]
+            )
         }
     }
 
@@ -682,13 +740,37 @@ struct ContentView: View {
 struct PDFKitView: NSViewRepresentable {
     var url: URL?
     var document: PDFDocument?
+    var onPDFClick: ((Int, Double, Double) -> Void)?
 
     func makeNSView(context: Context) -> PDFView {
         let pdfView = PDFView()
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
+        let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePDFClick(_:)))
+        pdfView.addGestureRecognizer(click)
         return pdfView
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onClick: onPDFClick)
+    }
+
+    final class Coordinator: NSObject {
+        var onClick: ((Int, Double, Double) -> Void)?
+        init(onClick: ((Int, Double, Double) -> Void)?) {
+            self.onClick = onClick
+        }
+        @objc func handlePDFClick(_ gesture: NSClickGestureRecognizer) {
+            guard let pdfView = gesture.view as? PDFView,
+                  let page = pdfView.currentPage,
+                  let onClick else { return }
+            let point = gesture.location(in: pdfView)
+            let converted = pdfView.convert(point, to: page)
+            let pageIndex = pdfView.document?.index(for: page) ?? 0
+            let pageHeight = page.bounds(for: pdfView.displayBox).height
+            onClick(pageIndex + 1, converted.x, pageHeight - converted.y)
+        }
     }
 
     func updateNSView(_ pdfView: PDFView, context: Context) {
