@@ -29,6 +29,12 @@ enum CompletionState: Equatable {
     }
 }
 
+enum FilterMode {
+    case command
+    case beginEnvironment
+    case citeKey
+}
+
 // MARK: - Completion Item
 
 struct LatexCompletion: Identifiable, Equatable {
@@ -80,6 +86,11 @@ final class LatexCompletionEngine: ObservableObject {
 
     private var filterTask: Task<Void, Never>?
     private let allCommands: [LatexCompletion]
+    private var citeKeys: [String] = []
+
+    func setCiteKeys(_ keys: [String]) {
+        self.citeKeys = keys
+    }
 
     init() {
         self.allCommands = Self.buildCommandList()
@@ -87,31 +98,40 @@ final class LatexCompletionEngine: ObservableObject {
 
     // MARK: - Async Filtering
 
-    func filterAsync(prefix: String, range: NSRange) {
+    func filterAsync(prefix: String, range: NSRange, filterMode: FilterMode = .command) {
         filterTask?.cancel()
-
-        // For empty prefix (just typed \), show all immediately without debounce
         let delay = prefix.isEmpty ? Duration.milliseconds(0) : Duration.milliseconds(50)
 
         filterTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self else { return }
 
-            let lower = prefix.lowercased()
-            let results = await Task.detached(priority: .userInitiated) { [cmds = self.allCommands] in
-                cmds.filter { $0.command.lowercased().hasPrefix(lower) }
-            }.value
+            let results: [LatexCompletion]
+            switch filterMode {
+            case .command:
+                let lower = prefix.lowercased()
+                results = await Task.detached(priority: .userInitiated) { [cmds = self.allCommands] in
+                    cmds.filter { $0.command.lowercased().hasPrefix(lower) }
+                }.value
+            case .beginEnvironment:
+                let lower = prefix.lowercased()
+                results = Self.environmentCompletions.filter { $0.command.lowercased().hasPrefix(lower) }
+            case .citeKey:
+                let lower = prefix.lowercased()
+                let keys = self.citeKeys
+                results = keys
+                    .filter { $0.lowercased().contains(lower) }
+                    .prefix(30)
+                    .map { key in
+                        LatexCompletion(command: key, displayName: key, insertionText: key, category: .reference, detail: "引用")
+                    }
+            }
 
             guard !Task.isCancelled else { return }
-
             DispatchQueue.main.async {
                 guard !Task.isCancelled else { return }
                 self.suggestions = results
-                if results.isEmpty {
-                    self.state = .idle
-                } else {
-                    self.state = .active(prefix: prefix, range: range)
-                }
+                self.state = results.isEmpty ? .idle : .active(prefix: prefix, range: range)
                 self.onStateChanged?()
             }
         }
@@ -124,8 +144,20 @@ final class LatexCompletionEngine: ObservableObject {
         guard cursorPos > 0 else { dismissWithCallback(); return }
 
         let text = textView.string as NSString
-        var i = cursorPos - 1
 
+        if let beginRange = detectBeginPrefix(in: text, cursorPos: cursorPos) {
+            let prefix = text.substring(with: NSRange(location: beginRange.location + 7, length: cursorPos - beginRange.location - 7))
+            filterAsync(prefix: prefix, range: beginRange, filterMode: .beginEnvironment)
+            return
+        }
+
+        if let citeRange = detectCitePrefix(in: text, cursorPos: cursorPos) {
+            let prefix = text.substring(with: NSRange(location: citeRange.location + 6, length: cursorPos - citeRange.location - 6))
+            filterAsync(prefix: prefix, range: citeRange, filterMode: .citeKey)
+            return
+        }
+
+        var i = cursorPos - 1
         while i >= 0 {
             let ch = Character(UnicodeScalar(text.character(at: i))!)
             if ch == "\\" {
@@ -144,6 +176,36 @@ final class LatexCompletionEngine: ObservableObject {
         }
 
         dismissWithCallback()
+    }
+
+    private func detectBeginPrefix(in text: NSString, cursorPos: Int) -> NSRange? {
+        let pattern = "\\begin{"
+        let searchStart = max(0, cursorPos - 50)
+        let searchRange = NSRange(location: searchStart, length: cursorPos - searchStart)
+        let full = text.substring(with: searchRange)
+        if let lastBegin = full.range(of: pattern, options: .backwards) {
+            let beginIdx = searchStart + full.distance(from: full.startIndex, to: lastBegin.lowerBound)
+            let substring = text.substring(with: NSRange(location: beginIdx, length: cursorPos - beginIdx))
+            if !substring.contains("}") {
+                return NSRange(location: beginIdx, length: cursorPos - beginIdx)
+            }
+        }
+        return nil
+    }
+
+    private func detectCitePrefix(in text: NSString, cursorPos: Int) -> NSRange? {
+        let pattern = "\\cite{"
+        let searchStart = max(0, cursorPos - 50)
+        let searchRange = NSRange(location: searchStart, length: cursorPos - searchStart)
+        let full = text.substring(with: searchRange)
+        if let lastCite = full.range(of: pattern, options: .backwards) {
+            let citeIdx = searchStart + full.distance(from: full.startIndex, to: lastCite.lowerBound)
+            let substring = text.substring(with: NSRange(location: citeIdx, length: cursorPos - citeIdx))
+            if !substring.contains("}") {
+                return NSRange(location: citeIdx, length: cursorPos - citeIdx)
+            }
+        }
+        return nil
     }
 
     // MARK: - Navigation (calls onStateChanged)
@@ -473,4 +535,44 @@ extension LatexCompletionEngine {
 
         return cmds
     }
+
+    static let environmentCompletions: [LatexCompletion] = {
+        let envs: [(String, String)] = [
+            ("document", "document 文档体"),
+            ("figure", "figure 插图"),
+            ("table", "table 表格"),
+            ("tabular", "tabular 表格主体"),
+            ("equation", "equation 行间公式"),
+            ("align", "align 对齐公式"),
+            ("itemize", "itemize 无序列表"),
+            ("enumerate", "enumerate 有序列表"),
+            ("description", "description 描述列表"),
+            ("center", "center 居中"),
+            ("quote", "quote 引用"),
+            ("quotation", "quotation 引文"),
+            ("verbatim", "verbatim 原样输出"),
+            ("abstract", "abstract 摘要"),
+            ("proof", "proof 证明"),
+            ("theorem", "theorem 定理"),
+            ("lemma", "lemma 引理"),
+            ("corollary", "corollary 推论"),
+            ("definition", "definition 定义"),
+            ("example", "example 示例"),
+            ("remark", "remark 备注"),
+            ("matrix", "matrix 矩阵"),
+            ("pmatrix", "pmatrix 括号矩阵"),
+            ("bmatrix", "bmatrix 方括号矩阵"),
+            ("cases", "cases 分段函数"),
+            ("lstlisting", "lstlisting 代码块"),
+        ]
+        return envs.map { cmd, detail in
+            LatexCompletion(
+                command: cmd,
+                displayName: "\\begin{\(cmd)}",
+                insertionText: "\\begin{\(cmd)}\n${1:}\n\\end{\(cmd)}",
+                category: .environment,
+                detail: detail
+            )
+        }
+    }()
 }
