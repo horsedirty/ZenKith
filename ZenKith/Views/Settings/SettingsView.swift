@@ -165,11 +165,6 @@ struct EditorSettingsView: View {
 
     var body: some View {
         Form {
-            Picker("字体大小", selection: $settings.fontSize) {
-                ForEach(10...24, id: \.self) { size in
-                    Text("\(size) pt").tag(Double(size))
-                }
-            }
             Toggle("显示行号", isOn: $settings.showLineNumbers)
             Toggle("自动换行", isOn: $settings.wordWrap)
         }

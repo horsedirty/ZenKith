@@ -65,12 +65,10 @@ struct ContentView: View {
                     guard let note = manager.selectedNote else { return nil }
                     return (manager.editingContent, note.displayTitle)
                 }
-                startScrollMonitor()
                 updateOutlineCache()
             }
             .onDisappear {
                 labelsUpdateTask?.cancel()
-                stopScrollMonitor()
             }
             .onChange(of: manager.editingContent) {
                 // Auto-save retains its own 2-second Combine debounce — keep it immediate.
@@ -308,7 +306,7 @@ struct ContentView: View {
                     if note.fileType.isEditable {
                         EditorView(
                             text: $manager.editingContent,
-                            fontSize: settings.fontSize,
+                            fontSize: 14,
                             language: settings.editorLanguage
                         )
                         .id(note.id)
@@ -378,7 +376,7 @@ struct ContentView: View {
                     PreviewWebView(
                         rawMarkdown: manager.editingContent,
                         baseURL: note.fileURL.deletingLastPathComponent(),
-                        fontSize: settings.fontSize,
+                        fontSize: 14,
                         highlightText: selectedText
                     )
                 }
@@ -413,7 +411,7 @@ struct ContentView: View {
                 // 无本地编译器，使用 WebView + MathJax 回退渲染
                 LatexPreviewView(
                     latexSource: manager.editingContent,
-                    fontSize: settings.fontSize,
+                    fontSize: 14,
                     baseURL: note.fileURL.deletingLastPathComponent()
                 )
             } else {
@@ -648,10 +646,6 @@ struct ContentView: View {
 
             Text("|").foregroundColor(.secondary.opacity(0.3)).font(.appCaption)
 
-            Text("\(Int(settings.fontSize))")
-                .font(.appCaption).foregroundColor(.secondary).frame(width: 18)
-                .help("Cmd+滚轮 调节字号")
-
             Spacer()
 
             Button(action: { showAIDrawer.toggle() }) {
@@ -724,24 +718,7 @@ struct ContentView: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.8))
     }
 
-    // MARK: - Cmd+滚轮字号
-
-    @State private var scrollMonitor: Any? = nil
-
-    private func startScrollMonitor() {
-        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            guard event.modifierFlags.contains(.command) else { return event }
-            let d = event.scrollingDeltaY
-            if abs(d) > 0.5 {
-                settings.fontSize = max(12, min(32, settings.fontSize + (d > 0 ? 1 : -1)))
-            }
-            return nil
-        }
-    }
-
-    private func stopScrollMonitor() {
-        if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
-    }
+    // MARK: - Outline Cache
 
     private func updateOutlineCache() {
         let currentHash = manager.editingContent.hashValue

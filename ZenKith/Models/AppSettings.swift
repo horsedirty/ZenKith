@@ -79,9 +79,6 @@ class AppSettings: ObservableObject {
     @Published var latexCompiler: LatexCompiler {
         didSet { UserDefaults.standard.set(latexCompiler.rawValue, forKey: "com.markflow.latexCompiler") }
     }
-    @Published var fontSize: Double {
-        didSet { UserDefaults.standard.set(fontSize, forKey: "com.markflow.fontSize") }
-    }
 
     // Directory
     @Published var defaultDirectoryURL: URL? {
@@ -128,10 +125,6 @@ class AppSettings: ObservableObject {
     // MARK: - Init
 
     init() {
-        // Font size
-        let savedFont = UserDefaults.standard.double(forKey: "com.markflow.fontSize")
-        self.fontSize = (savedFont >= 10 && savedFont <= 32) ? savedFont : 14
-
         // View mode
         let savedMode = UserDefaults.standard.integer(forKey: "com.markflow.viewMode")
         self.viewMode = ViewMode(rawValue: savedMode) ?? .split

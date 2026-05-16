@@ -34,7 +34,7 @@ final class LatexSyntaxHighlighter {
             specialChar: NSColor(red: 0.90, green: 0.45, blue: 0.45, alpha: 1),
             argumentText: NSColor(red: 0.85, green: 0.75, blue: 0.55, alpha: 1),
             defaultText: NSColor(red: 0.92, green: 0.92, blue: 0.94, alpha: 1),
-            defaultFont: .monospacedSystemFont(ofSize: 13, weight: .regular)
+            defaultFont: .monospacedSystemFont(ofSize: 14, weight: .regular)
         )
 
         static let light = Theme(
@@ -50,7 +50,7 @@ final class LatexSyntaxHighlighter {
             specialChar: NSColor(red: 0.75, green: 0.15, blue: 0.15, alpha: 1),
             argumentText: NSColor(red: 0.55, green: 0.40, blue: 0.15, alpha: 1),
             defaultText: NSColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1),
-            defaultFont: .monospacedSystemFont(ofSize: 13, weight: .regular)
+            defaultFont: .monospacedSystemFont(ofSize: 14, weight: .regular)
         )
     }
 
