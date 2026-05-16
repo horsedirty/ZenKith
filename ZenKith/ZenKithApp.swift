@@ -107,10 +107,9 @@ struct ZenKithApp: App {
             exportButton("Markdown (.md)", format: .markdown, shortcut: "4")
         }
 
-        // 帮助菜单
         CommandGroup(replacing: .help) {
-            Button("MarkFlow Note 帮助") {
-                if let url = URL(string: "https://github.com") {
+            Button("检查更新...") {
+                if let url = URL(string: "https://github.com/horsedirty/ZenKith/releases") {
                     NSWorkspace.shared.open(url)
                 }
             }

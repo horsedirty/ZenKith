@@ -109,7 +109,7 @@ class AppSettings: ObservableObject {
     // AI
     @AppStorage("aiAPIKey") var aiAPIKey = ""
     @AppStorage("aiEndpoint") var aiEndpoint = "https://api.openai.com/v1"
-    @AppStorage("aiModel") var aiModel = "gpt-4o"
+    @AppStorage("aiModel") var aiModel = "claude-opus-4.6"
 
     // Translation
     @Published var translationEngine: TranslationEngine {

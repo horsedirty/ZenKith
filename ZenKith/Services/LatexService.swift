@@ -312,7 +312,11 @@ final class LatexService {
             var message = ""
             var type: LatexErrorType = .error
 
-            if line.hasPrefix("! ") {
+            if let parsed = parseFileLineError(line) {
+                errorLine = parsed.line
+                message = parsed.message
+                type = parsed.type
+            } else if line.hasPrefix("! ") {
                 message = String(line.dropFirst(2))
                 errorLine = extractLineNumber(from: lines, around: i)
             } else if line.hasPrefix("LaTeX Error:") {
@@ -322,13 +326,37 @@ final class LatexService {
                 message = line
                 type = .warning
                 errorLine = extractLineNumber(from: lines, around: i)
+                if errorLine <= 0 {
+                    errorLine = extractInlineLineNumber(from: line)
+                }
             }
 
-            if errorLine > 0 {
-                errors.append(LatexError(line: errorLine, message: message, type: type))
+            if errorLine > 0 || (type == .warning && !message.isEmpty) {
+                errors.append(LatexError(line: max(errorLine, 0), message: message, type: type))
             }
         }
         return errors
+    }
+
+    /// 解析 -file-line-error 格式："./file.tex:42: Undefined control sequence."
+    private static func parseFileLineError(_ line: String) -> (line: Int, message: String, type: LatexErrorType)? {
+        let pattern = try? NSRegularExpression(pattern: "^[^:]+:(\\d+):\\s*(.*)", options: [])
+        guard let match = pattern?.firstMatch(in: line, options: [], range: NSRange(location: 0, length: line.utf16.count)),
+              let lineRange = Range(match.range(at: 1), in: line),
+              let msgRange = Range(match.range(at: 2), in: line),
+              let lineNum = Int(String(line[lineRange])) else { return nil }
+        let msg = String(line[msgRange])
+        let type: LatexErrorType = msg.hasPrefix("LaTeX Warning") ? .warning : .error
+        return (lineNum, msg, type)
+    }
+
+    /// 从内联警告文本中提取行号："LaTeX Warning: Overfull \hbox at lines 99--100"
+    private static func extractInlineLineNumber(from line: String) -> Int {
+        let pattern = try? NSRegularExpression(pattern: "lines?\\s+(\\d+)", options: [])
+        guard let match = pattern?.firstMatch(in: line, options: [], range: NSRange(location: 0, length: line.utf16.count)),
+              let numRange = Range(match.range(at: 1), in: line),
+              let num = Int(String(line[numRange])) else { return -1 }
+        return num
     }
 
     private static func extractLineNumber(from lines: [String], around index: Int) -> Int {

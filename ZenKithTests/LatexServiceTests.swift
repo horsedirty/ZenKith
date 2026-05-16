@@ -33,4 +33,41 @@ final class LatexServiceTests: XCTestCase {
         let errors = LatexService.extractErrorLines(from: "Output written on document.pdf")
         XCTAssertTrue(errors.isEmpty)
     }
+
+    func testExtractErrorLinesHandlesFileLineErrorFormat() {
+        let log = """
+        ./document.tex:42: Undefined control sequence.
+        ./document.tex:108: LaTeX Error: File not found.
+        ./document.tex:55: LaTeX Warning: Overfull \\hbox
+        """
+        let errors = LatexService.extractErrorLines(from: log)
+        XCTAssertEqual(errors.count, 3)
+        XCTAssertEqual(errors[0].line, 42)
+        XCTAssertEqual(errors[0].type, .error)
+        XCTAssertEqual(errors[1].line, 108)
+        XCTAssertEqual(errors[2].line, 55)
+        XCTAssertEqual(errors[2].type, .warning)
+    }
+
+    func testExtractErrorLinesHandlesInlineWarningLineNumber() {
+        let log = "LaTeX Warning: Overfull \\hbox at lines 99--100"
+        let errors = LatexService.extractErrorLines(from: log)
+        XCTAssertEqual(errors.count, 1)
+        XCTAssertEqual(errors[0].line, 99)
+        XCTAssertEqual(errors[0].type, .warning)
+    }
+
+    func testExtractErrorLinesHandlesMixedFormats() {
+        let log = """
+        ./document.tex:15: Missing $ inserted.
+        ! Undefined control sequence.
+        l.42 \\badcommand
+        LaTeX Warning: Reference `fig:missing' on page 3 undefined
+        """
+        let errors = LatexService.extractErrorLines(from: log)
+        XCTAssertEqual(errors.count, 3)
+        XCTAssertEqual(errors[0].line, 15)
+        XCTAssertEqual(errors[1].line, 42)
+        XCTAssertEqual(errors[2].type, .warning)
+    }
 }

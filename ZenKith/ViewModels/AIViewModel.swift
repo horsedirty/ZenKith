@@ -192,7 +192,7 @@ final class AIViewModel: ObservableObject {
         aiService.streamChat(
             messages: messages,
             config: config,
-            systemPrompt: "你是一个专业的写作助手，帮助用户改进 Markdown 笔记、提供写作建议和知识解答。请使用中文回复。",
+            systemPrompt: "你是一个专业的写作助手，帮助用户改进 Markdown或latex 笔记、提供写作建议和知识解答。请使用中文回复。",
             onReasoningChunk: { [weak self] chunk in
                 self?.streamingReasoning += chunk
             },
@@ -313,7 +313,7 @@ final class AIViewModel: ObservableObject {
         aiService.streamChat(
             messages: contextMessages,
             config: config,
-            systemPrompt: "你是一个专业的写作助手，帮助用户改进 Markdown 笔记、提供写作建议和知识解答。请使用中文回复。如果提供了联网搜索结果，请基于搜索内容进行回答并引用来源。",
+            systemPrompt: "你是一个专业的写作助手，帮助用户改进 Markdown或latex 笔记、提供写作建议和知识解答。请使用中文回复。如果提供了联网搜索结果，请基于搜索内容进行回答并引用来源。",
             onReasoningChunk: { [weak self] chunk in
                 self?.streamingReasoning += chunk
             },

@@ -22,7 +22,7 @@ enum AIProvider: String, Codable, CaseIterable {
         case .deepseek:
             return "deepseek-v4-flash"
         case .siliconflow:
-            return "deepseek-ai/DeepSeek-V3"
+            return "deepseek-ai/DeepSeek-v4-flash"
         case .custom:
             return ""
         }
@@ -35,16 +35,12 @@ enum AIProvider: String, Codable, CaseIterable {
             return ["deepseek-v4-flash", "deepseek-v4-pro"]
         case .siliconflow:
             return [
-                "deepseek-ai/DeepSeek-V3",
-                "deepseek-ai/DeepSeek-R1",
-                "deepseek-ai/DeepSeek-V2.5",
-                "Pro/deepseek-ai/DeepSeek-V3",
-                "Pro/deepseek-ai/DeepSeek-R1",
-                "Qwen/Qwen2.5-72B-Instruct",
-                "Qwen/Qwen2.5-32B-Instruct",
-                "Qwen/Qwen2.5-7B-Instruct",
-                "meta-llama/Llama-3.3-70B-Instruct",
-                "meta-llama/Llama-3.1-405B-Instruct",
+                "deepseek-ai/DeepSeek-V4-Flash",
+                "Pro/moonshotai/Kimi-K2.6",
+                "Pro/zai-org/GLM-5.1",
+                "Pro/zai-org/GLM-5",
+                "Pro/moonshotai/Kimi-K2.5",
+                "Qwen/Qwen3.6-35B-A3B",
             ]
         case .custom:
             return []
