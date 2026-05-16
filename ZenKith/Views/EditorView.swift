@@ -124,7 +124,8 @@ struct EditorView: NSViewRepresentable {
         if tv.string != text, !context.coordinator.isInternalEdit {
             if tv.hasMarkedText() {
                 // IME composition in progress — do NOT overwrite text storage.
-                // The coordinator's textDidChange will flush pendingText once composition commits.
+                // Any concurrent external text change will be deferred until composition
+                // commits or is cancelled; textDidChange will flush pendingText at that point.
                 return
             } else if let pending = context.coordinator.pendingText, pending != text {
                 context.coordinator.isProgrammaticChange = true
