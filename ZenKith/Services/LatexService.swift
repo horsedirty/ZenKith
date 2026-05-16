@@ -1,11 +1,28 @@
 import Foundation
 
+/// 编译错误类型
+enum LatexErrorType: String, Equatable {
+    case error
+    case warning
+}
+
+/// 结构化的 LaTeX 编译错误
+struct LatexError: Equatable {
+    let line: Int
+    let message: String
+    let type: LatexErrorType
+}
+
 /// LaTeX 编译结果
 struct LatexCompileResult {
     let pdfData: Data?
     let log: String
     let success: Bool
     let passCount: Int
+
+    var errors: [LatexError] {
+        LatexService.extractErrorLines(from: log)
+    }
 }
 
 /// LaTeX 编译与渲染服务：支持 pdflatex / xelatex / lualatex，多轮编译、BibTeX 支持
@@ -280,5 +297,50 @@ final class LatexService {
         let result = await compile(texURL: texFile, compiler: .pdflatex)
         try? FileManager.default.removeItem(at: tmpDir)
         return result.pdfData
+    }
+
+    // MARK: - 错误提取
+
+    /// 从编译日志中提取结构化的错误列表（含行号）
+    static func extractErrorLines(from log: String) -> [LatexError] {
+        let lines = log.components(separatedBy: "\n")
+        var errors: [LatexError] = []
+
+        for i in 0..<lines.count {
+            let line = lines[i].trimmingCharacters(in: .whitespaces)
+            var errorLine = -1
+            var message = ""
+            var type: LatexErrorType = .error
+
+            if line.hasPrefix("! ") {
+                message = String(line.dropFirst(2))
+                errorLine = extractLineNumber(from: lines, around: i)
+            } else if line.hasPrefix("LaTeX Error:") {
+                message = line
+                errorLine = extractLineNumber(from: lines, around: i)
+            } else if line.hasPrefix("LaTeX Warning:") {
+                message = line
+                type = .warning
+                errorLine = extractLineNumber(from: lines, around: i)
+            }
+
+            if errorLine > 0 {
+                errors.append(LatexError(line: errorLine, message: message, type: type))
+            }
+        }
+        return errors
+    }
+
+    private static func extractLineNumber(from lines: [String], around index: Int) -> Int {
+        for j in index..<min(index + 5, lines.count) {
+            let l = lines[j].trimmingCharacters(in: .whitespaces)
+            if l.hasPrefix("l.") {
+                let numStr = String(l.dropFirst(2))
+                    .components(separatedBy: CharacterSet.decimalDigits.inverted)
+                    .first ?? ""
+                return Int(numStr) ?? -1
+            }
+        }
+        return -1
     }
 }

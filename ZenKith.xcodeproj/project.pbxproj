@@ -11,16 +11,26 @@
 		F7A9C82C2FA4E9B500D1CA45 /* CodeEditor in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */; };
 		F7A9C82F2FA4E9F800D1CA45 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */; };
 		F7A9C8312FA4F0000D1CA45 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C8302FA4F0000D1CA45 /* Textual */; };
+		9DF717F9D42D4B4790B459AA /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C8282FA4E97900D1CA45 /* Markdown */; };
+		43261F664DA64D0C999A2AE6 /* CodeEditor in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */; };
+		CF59A9483FB74464B2154E92 /* KeychainAccess in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */; };
+		980490517B50481D8515BEED /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = F7A9C8302FA4F0000D1CA45 /* Textual */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		F7A9C8192FA4E92700D1CA45 /* ZenKith.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZenKith.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4887AEFC561645A1939FC3FE /* ZenKithTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZenKithTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		F7A9C81B2FA4E92700D1CA45 /* ZenKith */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ZenKith;
+			sourceTree = "<group>";
+		};
+		9EDE2950FCD44A359D4940BF /* ZenKithTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ZenKithTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -38,6 +48,18 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
+		BD614012220044E898D3CE05 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				43261F664DA64D0C999A2AE6 /* CodeEditor in Frameworks */,
+				9DF717F9D42D4B4790B459AA /* Markdown in Frameworks */,
+				CF59A9483FB74464B2154E92 /* KeychainAccess in Frameworks */,
+				980490517B50481D8515BEED /* Textual in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
 
 /* Begin PBXGroup section */
 		F7A9C8102FA4E92700D1CA45 = {
@@ -52,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				F7A9C8192FA4E92700D1CA45 /* ZenKith.app */,
+				4887AEFC561645A1939FC3FE /* ZenKithTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,6 +108,32 @@
 			productReference = F7A9C8192FA4E92700D1CA45 /* ZenKith.app */;
 			productType = "com.apple.product-type.application";
 		};
+		3580922C46A4478EB69F0BCB /* ZenKithTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 57D3DA999734453E8903AA2F /* Build configuration list for PBXNativeTarget "ZenKithTests" */;
+			buildPhases = (
+				4A65AA6A85E74FA4BE1CB9A3 /* Sources */,
+				BD614012220044E898D3CE05 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				89669A3EB95E4585BD3A1718 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9EDE2950FCD44A359D4940BF /* ZenKithTests */,
+			);
+			name = ZenKithTests;
+			packageProductDependencies = (
+				F7A9C8282FA4E97900D1CA45 /* Markdown */,
+				F7A9C82B2FA4E9B500D1CA45 /* CodeEditor */,
+				F7A9C82E2FA4E9F800D1CA45 /* KeychainAccess */,
+				F7A9C8302FA4F0000D1CA45 /* Textual */,
+			);
+			productName = ZenKithTests;
+			productReference = 4887AEFC561645A1939FC3FE /* ZenKithTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -97,6 +146,10 @@
 				TargetAttributes = {
 					F7A9C8182FA4E92700D1CA45 = {
 						CreatedOnToolsVersion = 26.4.1;
+					};
+					3580922C46A4478EB69F0BCB = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = F7A9C8182FA4E92700D1CA45;
 					};
 				};
 			};
@@ -121,6 +174,7 @@
 			projectRoot = "";
 			targets = (
 				F7A9C8182FA4E92700D1CA45 /* ZenKith */,
+				3580922C46A4478EB69F0BCB /* ZenKithTests */,
 			);
 		};
 /* End PBXProject section */
@@ -143,7 +197,21 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4A65AA6A85E74FA4BE1CB9A3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		89669A3EB95E4585BD3A1718 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F7A9C8182FA4E92700D1CA45 /* ZenKith */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		F7A9C8222FA4E92800D1CA45 /* Debug */ = {
@@ -330,6 +398,50 @@
 			};
 			name = Release;
 		};
+		A793CDC3A63C4111B91F47DE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 101;
+				DEVELOPMENT_TEAM = YAQ48GV4VF;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = "1.0.1";
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.ZenKithTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ZenKith.app/Contents/MacOS/ZenKith";
+			};
+			name = Debug;
+		};
+		106FC6C018CD43AAA39DFAE5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 101;
+				DEVELOPMENT_TEAM = YAQ48GV4VF;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = "1.0.1";
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.ZenKithTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ZenKith.app/Contents/MacOS/ZenKith";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -347,6 +459,15 @@
 			buildConfigurations = (
 				F7A9C8252FA4E92800D1CA45 /* Debug */,
 				F7A9C8262FA4E92800D1CA45 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		57D3DA999734453E8903AA2F /* Build configuration list for PBXNativeTarget "ZenKithTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A793CDC3A63C4111B91F47DE /* Debug */,
+				106FC6C018CD43AAA39DFAE5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
