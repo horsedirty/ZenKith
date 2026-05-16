@@ -33,25 +33,40 @@ struct ContentView: View {
     // MARK: - Body
 
     var body: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                if !sidebarCollapsed {
-                    SidebarView(manager: manager, settings: settings)
-                        .frame(width: min(280, geometry.size.width * 0.25))
-                    sidebarToggleDivider
-                } else {
-                    collapsedSidebar
-                    sidebarToggleDivider
-                }
+        baseView
+            .onReceive(NotificationCenter.default.publisher(for: .sendCompileErrorsToAI)) { notification in
+                guard let errors = notification.userInfo?["errors"] as? String,
+                      let source = notification.userInfo?["source"] as? String else { return }
+                aiViewModel.sendCompileErrorsToAI(errorsText: errors, source: source)
+            }
+            .sheet(isPresented: $showCompileLog) {
+                makeCompileLogSheet(errors: LatexService.extractErrorLines(from: compileLog))
+            }
+    }
 
-                mainContentArea
+    @ViewBuilder
+    private var baseView: some View {
+        Group {
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    if !sidebarCollapsed {
+                        SidebarView(manager: manager, settings: settings)
+                            .frame(width: min(280, geometry.size.width * 0.25))
+                        sidebarToggleDivider
+                    } else {
+                        collapsedSidebar
+                        sidebarToggleDivider
+                    }
 
-                if showAIDrawer {
-                    Divider()
-                    AIDrawer(viewModel: aiViewModel)
-                        .frame(width: max(280, aiDrawerWidth))
-                        .overlay(aiDrawerDragHandle)
-                        .onAppear { dragStartWidth = aiDrawerWidth }
+                    mainContentArea
+
+                    if showAIDrawer {
+                        Divider()
+                        AIDrawer(viewModel: aiViewModel)
+                            .frame(width: max(280, aiDrawerWidth))
+                            .overlay(aiDrawerDragHandle)
+                            .onAppear { dragStartWidth = aiDrawerWidth }
+                    }
                 }
             }
         }
@@ -72,7 +87,6 @@ struct ContentView: View {
                 let ext = note.fileURL.pathExtension.lowercased()
                 if ext == "tex" || ext == "ltx" {
                     settings.editorLanguage = .latex
-                    // 从缓存恢复编译结果
                     if let cached = compileCache[note.fileURL] {
                         compilePDFData = cached.data
                         if cachedPDFSourceURL != note.fileURL {
@@ -121,21 +135,6 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openPDFTranslation)) { _ in
             openWindow(id: "pdfTranslation")
-        }
-        .sheet(isPresented: $showCompileLog) {
-            VStack(spacing: 12) {
-                Text("编译日志").font(.appHeadline)
-                ScrollView {
-                    Text(compileLog.isEmpty ? "无输出" : compileLog)
-                        .font(.system(size: 11, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                Button("关闭") { showCompileLog = false }
-                    .keyboardShortcut(.cancelAction)
-            }
-            .frame(width: 600, height: 400)
-            .padding()
         }
     }
 
@@ -378,6 +377,79 @@ struct ContentView: View {
                 cachedPDFDocument = PDFDocument(data: pdfData)
                 cachedPDFSourceURL = texURL
             }
+        }
+    }
+
+    // MARK: - 编译日志 Sheet
+
+    @ViewBuilder
+    private func makeCompileLogSheet(errors: [LatexError]) -> some View {
+        VStack(spacing: 12) {
+            Text("编译日志").font(.appHeadline)
+            if errors.isEmpty {
+                ScrollView {
+                    Text(compileLog.isEmpty ? "无输出" : compileLog)
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                }
+            } else {
+                compileErrorList(errors: errors)
+            }
+            Button("关闭") { showCompileLog = false }
+                .keyboardShortcut(.cancelAction)
+        }
+        .frame(width: 600, height: 400)
+        .padding()
+    }
+
+    @ViewBuilder
+    private func compileErrorList(errors: [LatexError]) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(errors.enumerated()), id: \.offset) { _, err in
+                    HStack(spacing: 4) {
+                        Image(systemName: err.type == .error ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundColor(err.type == .error ? .red : .orange)
+                            .font(.system(size: 10))
+                        Text("行 \(err.line):")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        Text(err.message)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(err.type == .error ? .red : .orange)
+                            .lineLimit(3)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        showCompileLog = false
+                        NotificationCenter.default.post(
+                            name: .scrollToLine,
+                            object: nil,
+                            userInfo: ["line": err.line]
+                        )
+                    }
+                    Divider()
+                }
+                Button(action: {
+                    let errorText = errors.map { "行\($0.line): \($0.message)" }.joined(separator: "\n")
+                    showCompileLog = false
+                    let source = manager.editingContent
+                    NotificationCenter.default.post(
+                        name: .sendCompileErrorsToAI,
+                        object: nil,
+                        userInfo: ["errors": errorText, "source": source]
+                    )
+                }) {
+                    Label("将错误发送给 AI 诊断", systemImage: "sparkles")
+                        .font(.appCaption)
+                }
+                .padding(.top, 8)
+            }
+            .padding()
         }
     }
 

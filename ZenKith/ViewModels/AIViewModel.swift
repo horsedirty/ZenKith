@@ -414,4 +414,8 @@ final class AIViewModel: ObservableObject {
         }
         return config
     }
+
+    func sendCompileErrorsToAI(errorsText: String, source: String) {
+        // Will be fully implemented in Task 9
+    }
 }
