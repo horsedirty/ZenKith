@@ -68,7 +68,10 @@ struct ContentView: View {
                 startScrollMonitor()
                 updateOutlineCache()
             }
-            .onDisappear { stopScrollMonitor() }
+            .onDisappear {
+                labelsUpdateTask?.cancel()
+                stopScrollMonitor()
+            }
             .onChange(of: manager.editingContent) {
                 // Auto-save retains its own 2-second Combine debounce — keep it immediate.
                 DispatchQueue.main.async { manager.scheduleAutoSave() }
@@ -77,6 +80,7 @@ struct ContentView: View {
                 // Debounce to avoid per-keystroke regex work (especially during IME composition).
                 labelsUpdateTask?.cancel()
                 let task = DispatchWorkItem {
+                    // Reads manager.editingContent at fire time — intentionally uses the latest value.
                     let labels = extractLabels(from: manager.editingContent)
                     NotificationCenter.default.post(
                         name: .refLabelsDidUpdate,
