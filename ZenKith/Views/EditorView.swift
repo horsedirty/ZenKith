@@ -277,13 +277,18 @@ struct EditorView: NSViewRepresentable {
         func updateHighlighterIfNeeded(language: EditorLanguage, dark: Bool, tv: NSTextView, fontSize: Double) {
             let themeChanged = (lastHighlightedDark != dark)
             let languageChanged = (self.language != language)
+            let clampedSize = max(12, min(32, fontSize))
+            // fontSize must also be a trigger: defaultFont mismatching tv.font causes
+            // setAttributes to stomp the line's font on every keystroke, corrupting
+            // NSLayoutManager's glyph cache and producing display glitches with CJK text.
+            let fontSizeChanged = abs(syntaxHighlighter.theme.defaultFont.pointSize - clampedSize) > 0.1
             
-            if languageChanged || themeChanged {
+            if languageChanged || themeChanged || fontSizeChanged {
                 lastHighlightedDark = dark
                 
                 syntaxHighlighter.theme = dark ? .dark : .light
                 syntaxHighlighter.theme.defaultFont = .monospacedSystemFont(
-                    ofSize: max(12, min(32, fontSize)), weight: .regular
+                    ofSize: clampedSize, weight: .regular
                 )
                 
                 if language == .latex {
