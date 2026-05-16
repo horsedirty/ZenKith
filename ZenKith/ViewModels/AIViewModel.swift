@@ -416,6 +416,84 @@ final class AIViewModel: ObservableObject {
     }
 
     func sendCompileErrorsToAI(errorsText: String, source: String) {
-        // Will be fully implemented in Task 9
+        guard !isStreaming else { return }
+        if selectedSessionId == nil { createNewSession() }
+
+        let prompt = "我的 LaTeX 文档编译失败了，以下是错误日志和源代码，请帮我诊断并给出修复建议：\n\n## 错误日志\n\(errorsText)\n\n## 源代码\n```latex\n\(source)\n```"
+
+        let userMessage = AIService.ChatMessage(role: .user, content: prompt)
+        messages.append(userMessage)
+
+        isStreaming = true
+        streamingText = ""
+        streamingReasoning = ""
+        saveCurrentSession()
+
+        aiService.streamChat(
+            messages: messages,
+            config: config,
+            systemPrompt: "你是一个专业的 LaTeX 写作助手，擅长诊断编译错误并提供修复方案。请使用中文回复。",
+            onReasoningChunk: { [weak self] chunk in self?.streamingReasoning += chunk },
+            onChunk: { [weak self] chunk in self?.streamingText += chunk },
+            onComplete: { [weak self] content, reasoning in
+                guard let self else { return }
+                let msg = AIService.ChatMessage(role: .assistant, content: content, reasoningContent: reasoning.isEmpty ? nil : reasoning)
+                self.messages.append(msg)
+                self.streamingText = ""
+                self.streamingReasoning = ""
+                self.isStreaming = false
+                self.saveCurrentSession()
+            },
+            onError: { [weak self] error in
+                guard let self else { return }
+                let msg = AIService.ChatMessage(role: .assistant, content: "错误：\(error.localizedDescription)")
+                self.messages.append(msg)
+                self.streamingText = ""
+                self.streamingReasoning = ""
+                self.isStreaming = false
+                self.saveCurrentSession()
+            }
+        )
+    }
+
+    func sendSelectionToAI(_ text: String) {
+        guard !isStreaming else { return }
+        if selectedSessionId == nil { createNewSession() }
+
+        let prompt = "以下是我 LaTeX 文档中选中的一段代码，请帮我分析或改进：\n\n```latex\n\(text)\n```"
+
+        let userMessage = AIService.ChatMessage(role: .user, content: prompt)
+        messages.append(userMessage)
+
+        isStreaming = true
+        streamingText = ""
+        streamingReasoning = ""
+        saveCurrentSession()
+
+        aiService.streamChat(
+            messages: messages,
+            config: config,
+            systemPrompt: "你是一个专业的 LaTeX 写作助手，帮助用户改进 LaTeX 代码、提供排版建议和知识解答。请使用中文回复。",
+            onReasoningChunk: { [weak self] chunk in self?.streamingReasoning += chunk },
+            onChunk: { [weak self] chunk in self?.streamingText += chunk },
+            onComplete: { [weak self] content, reasoning in
+                guard let self else { return }
+                let msg = AIService.ChatMessage(role: .assistant, content: content, reasoningContent: reasoning.isEmpty ? nil : reasoning)
+                self.messages.append(msg)
+                self.streamingText = ""
+                self.streamingReasoning = ""
+                self.isStreaming = false
+                self.saveCurrentSession()
+            },
+            onError: { [weak self] error in
+                guard let self else { return }
+                let msg = AIService.ChatMessage(role: .assistant, content: "错误：\(error.localizedDescription)")
+                self.messages.append(msg)
+                self.streamingText = ""
+                self.streamingReasoning = ""
+                self.isStreaming = false
+                self.saveCurrentSession()
+            }
+        )
     }
 }

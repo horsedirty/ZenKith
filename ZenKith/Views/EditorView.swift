@@ -72,6 +72,7 @@ struct EditorView: NSViewRepresentable {
         context.coordinator.completionPopover = CompletionPopover(engine: context.coordinator.completionEngine)
         
         context.coordinator.wireCompletionEngine()
+        context.coordinator.setupContextMenu()
         
         // 连接语法高亮
         context.coordinator.setupHighlighting(for: textView)
@@ -138,6 +139,46 @@ struct EditorView: NSViewRepresentable {
         fileprivate var lineHighlightLayer: CAShapeLayer?
         
         let completionEngine = LatexCompletionEngine()
+
+        func setupContextMenu() {
+            guard let tv = textView else { return }
+            let menu = NSMenu()
+
+            let sendItem = NSMenuItem(
+                title: "发送选中内容给 AI",
+                action: #selector(sendSelectionToAI),
+                keyEquivalent: "e"
+            )
+            sendItem.keyEquivalentModifierMask = [.command, .shift]
+            menu.addItem(sendItem)
+            menu.addItem(.separator())
+
+            let copyItem = NSMenuItem(title: "复制", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+            copyItem.keyEquivalentModifierMask = .command
+            menu.addItem(copyItem)
+
+            let pasteItem = NSMenuItem(title: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+            pasteItem.keyEquivalentModifierMask = .command
+            menu.addItem(pasteItem)
+
+            tv.menu = menu
+        }
+
+        @objc private func sendSelectionToAI() {
+            guard let tv = textView else { return }
+            let selectedText: String
+            if tv.selectedRange().length > 0 {
+                selectedText = (tv.string as NSString).substring(with: tv.selectedRange())
+            } else {
+                selectedText = tv.string
+            }
+            NotificationCenter.default.post(
+                name: .sendSelectionToAI,
+                object: nil,
+                userInfo: ["text": selectedText]
+            )
+        }
+        
         fileprivate var completionPopover: CompletionPopover?
         
         // 语法高亮

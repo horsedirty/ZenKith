@@ -35,6 +35,11 @@ struct ContentView: View {
 
     var body: some View {
         baseView
+            .onReceive(NotificationCenter.default.publisher(for: .sendSelectionToAI)) { notification in
+                if let text = notification.userInfo?["text"] as? String {
+                    aiViewModel.sendSelectionToAI(text)
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .sendCompileErrorsToAI)) { notification in
                 guard let errors = notification.userInfo?["errors"] as? String,
                       let source = notification.userInfo?["source"] as? String else { return }
