@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var compileLog = ""
     @State private var compilePDFData: Data?
     @State private var showCompileLog = false
+    @State private var showOutlinePanel = true
 
     // 编译缓存：texURL → (PDF data, 源码hash)
     @State private var compileCache: [URL: (data: Data, hash: Int)] = [:]
@@ -239,30 +240,48 @@ struct ContentView: View {
     // MARK: - 编辑器
 
     private var editorPane: some View {
-        VStack(spacing: 0) {
-            if let note = manager.selectedNote {
-                if note.fileType.isEditable {
-                    EditorView(
-                        text: $manager.editingContent,
-                        fontSize: settings.fontSize,
-                        language: settings.editorLanguage
-                    )
-                    .id(note.id)
-                } else {
-                    Color(nsColor: .controlBackgroundColor)
-                        .overlay {
-                            VStack(spacing: 12) {
-                                Image(systemName: note.fileType.systemImage).font(.appFont(size: 36)).foregroundColor(.secondary)
-                                Text("\(note.displayTitle)").font(.appHeadline)
-                                Text("此文件类型不可编辑").foregroundColor(.secondary)
+        HStack(spacing: 0) {
+            if settings.editorLanguage == .latex && showOutlinePanel {
+                latexOutlinePanel
+                Divider()
+            }
+            VStack(spacing: 0) {
+                if let note = manager.selectedNote {
+                    if note.fileType.isEditable {
+                        EditorView(
+                            text: $manager.editingContent,
+                            fontSize: settings.fontSize,
+                            language: settings.editorLanguage
+                        )
+                        .id(note.id)
+                    } else {
+                        Color(nsColor: .controlBackgroundColor)
+                            .overlay {
+                                VStack(spacing: 12) {
+                                    Image(systemName: note.fileType.systemImage).font(.appFont(size: 36)).foregroundColor(.secondary)
+                                    Text("\(note.displayTitle)").font(.appHeadline)
+                                    Text("此文件类型不可编辑").foregroundColor(.secondary)
+                                }
                             }
-                        }
+                    }
+                    noteStatusBar(note)
+                } else {
+                    emptyStateView
                 }
-                noteStatusBar(note)
-            } else {
-                emptyStateView
             }
         }
+    }
+
+    private var latexOutlinePanel: some View {
+        let outlineItems = LatexOutliner.parse(manager.editingContent)
+        return OutlinePanelView(items: outlineItems) { lineNumber in
+            NotificationCenter.default.post(
+                name: .scrollToLine,
+                object: nil,
+                userInfo: ["line": lineNumber]
+            )
+        }
+        .frame(width: 220)
     }
 
     // MARK: - 预览
@@ -514,6 +533,14 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderless).help("查看编译日志")
                 }
+
+                Button(action: { showOutlinePanel.toggle() }) {
+                    Image(systemName: showOutlinePanel ? "list.bullet.indent" : "list.bullet")
+                        .font(.appBody)
+                        .foregroundColor(showOutlinePanel ? .accentColor : .secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("切换文档大纲 (LaTeX)")
             }
 
             Text("|").foregroundColor(.secondary.opacity(0.3)).font(.appCaption)
