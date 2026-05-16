@@ -79,22 +79,40 @@ final class BibManager: ObservableObject {
         return missing
     }
 
+    func loadBibContent(_ content: String) {
+        entries = parseBibtex(content)
+        detectDuplicateKeys()
+    }
+
     private func parseBibtex(_ content: String) -> [BibEntry] {
         var entries: [BibEntry] = []
-        let pattern = try? NSRegularExpression(pattern: "@(\\w+)\\s*\\{\\s*(\\S+)\\s*,\\s*([^@]*?)\\}\\s*$", options: [.dotMatchesLineSeparators])
-        guard let regex = pattern else { return [] }
+        let text = content as NSString
+        var searchRange = NSRange(location: 0, length: text.length)
+        guard let atRegex = try? NSRegularExpression(pattern: "@(\\w+)\\s*\\{\\s*") else { return entries }
 
-        regex.enumerateMatches(in: content, options: [], range: NSRange(location: 0, length: content.utf16.count)) { match, _, _ in
-            guard let match, match.numberOfRanges >= 3,
-                  let typeRange = Range(match.range(at: 1), in: content),
-                  let keyRange = Range(match.range(at: 2), in: content) else { return }
-            let type = String(content[typeRange]).trimmingCharacters(in: .whitespaces)
-            let key = String(content[keyRange]).trimmingCharacters(in: .whitespaces)
+        while true {
+            guard
+                  let atMatch = atRegex.firstMatch(in: content, options: [], range: searchRange),
+                  atMatch.numberOfRanges >= 2,
+                  let typeRange = Range(atMatch.range(at: 1), in: content) else { break }
 
-            var fieldsContent = ""
-            if match.numberOfRanges >= 4, let fieldsRange = Range(match.range(at: 3), in: content) {
-                fieldsContent = String(content[fieldsRange])
-            }
+            let type = String(content[typeRange])
+
+            let afterBrace = atMatch.range(at: 0).location + atMatch.range(at: 0).length
+            guard afterBrace < text.length else { break }
+
+            let remaining = text.substring(from: afterBrace)
+            guard let firstComma = remaining.firstIndex(of: ",") else { break }
+
+            let key = String(remaining[..<firstComma]).trimmingCharacters(in: .whitespaces)
+
+            let fieldsStart = afterBrace + remaining.distance(from: remaining.startIndex, to: remaining.index(after: firstComma))
+            guard fieldsStart < text.length else { break }
+
+            let fieldsString = text.substring(from: fieldsStart)
+            guard let closingBrace = findMatchingBrace(in: fieldsString, startOffset: 0) else { break }
+
+            let fieldsContent = (fieldsString as NSString).substring(to: closingBrace)
             let fields = parseFields(fieldsContent)
 
             entries.append(BibEntry(
@@ -104,8 +122,26 @@ final class BibManager: ObservableObject {
                 journal: fields["journal"] ?? fields["booktitle"] ?? "",
                 year: fields["year"] ?? ""
             ))
+
+            let matchEnd = fieldsStart + closingBrace + 1
+            searchRange = NSRange(location: matchEnd, length: text.length - matchEnd)
+            if searchRange.length <= 0 { break }
         }
         return entries
+    }
+
+    private func findMatchingBrace(in text: String, startOffset: Int) -> Int? {
+        var depth = 0
+        let chars = Array(text)
+        for (i, ch) in chars.enumerated() {
+            if i < startOffset { continue }
+            if ch == "{" { depth += 1 }
+            else if ch == "}" {
+                if depth == 0 { return i }
+                depth -= 1
+            }
+        }
+        return nil
     }
 
     private func parseFields(_ text: String) -> [String: String] {

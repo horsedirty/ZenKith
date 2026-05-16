@@ -26,6 +26,8 @@ struct ContentView: View {
     @State private var showCompileLog = false
     @State private var showOutlinePanel = true
     @State private var leftPanelTab = 0
+    @State private var cachedOutlineHash: Int = 0
+    @State private var cachedOutlineItems: [OutlineItem] = []
 
     // 编译缓存：texURL → (PDF data, 源码hash)
     @State private var compileCache: [URL: (data: Data, hash: Int)] = [:]
@@ -63,10 +65,18 @@ struct ContentView: View {
                     return (manager.editingContent, note.displayTitle)
                 }
                 startScrollMonitor()
+                updateOutlineCache()
             }
             .onDisappear { stopScrollMonitor() }
             .onChange(of: manager.editingContent) {
                 DispatchQueue.main.async { manager.scheduleAutoSave() }
+                let labels = extractLabels(from: manager.editingContent)
+                NotificationCenter.default.post(
+                    name: .refLabelsDidUpdate,
+                    object: nil,
+                    userInfo: ["labels": labels]
+                )
+                updateOutlineCache()
             }
             .onChange(of: bibManager.allKeys) { newKeys in
                 NotificationCenter.default.post(
@@ -316,7 +326,7 @@ struct ContentView: View {
             .padding(4)
 
             if leftPanelTab == 0 {
-                let outlineItems = LatexOutliner.parse(manager.editingContent)
+                let outlineItems = cachedOutlineItems
                 OutlinePanelView(items: outlineItems) { lineNumber in
                     NotificationCenter.default.post(
                         name: .scrollToLine,
@@ -429,6 +439,11 @@ struct ContentView: View {
         isCompiling = true
         compilePass = (0, 3)
         compileLog = ""
+
+        // 清除旧的缓存，避免显示过期 PDF
+        compilePDFData = nil
+        cachedPDFDocument = nil
+        compileCache.removeValue(forKey: texURL)
 
         Task {
             let result = await LatexService.compile(texURL: texURL, compiler: compiler) { pass, total in
@@ -714,7 +729,27 @@ struct ContentView: View {
         if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
     }
 
+    private func updateOutlineCache() {
+        let currentHash = manager.editingContent.hashValue
+        if currentHash != cachedOutlineHash {
+            cachedOutlineItems = LatexOutliner.parse(manager.editingContent)
+            cachedOutlineHash = currentHash
+        }
+    }
+
     // MARK: - 导出
+
+    private func extractLabels(from source: String) -> [String] {
+        var labels: [String] = []
+        let pattern = try? NSRegularExpression(pattern: "\\\\label\\{([^}]*)\\}", options: [])
+        let nsText = source as NSString
+        pattern?.enumerateMatches(in: source, options: [], range: NSRange(location: 0, length: nsText.length)) { match, _, _ in
+            guard let match, match.numberOfRanges > 1,
+                  let labelRange = Range(match.range(at: 1), in: source) else { return }
+            labels.append(String(source[labelRange]))
+        }
+        return labels
+    }
 
     private func exportNote(format: ExportService.ExportFormat) {
         guard let note = manager.selectedNote else { return }
@@ -742,13 +777,14 @@ struct PDFKitView: NSViewRepresentable {
     var document: PDFDocument?
     var onPDFClick: ((Int, Double, Double) -> Void)?
 
-    func makeNSView(context: Context) -> PDFView {
-        let pdfView = PDFView()
+    func makeNSView(context: Context) -> SyncTeXPDFView {
+        let pdfView = SyncTeXPDFView()
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
-        let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePDFClick(_:)))
-        pdfView.addGestureRecognizer(click)
+        pdfView.onPageClick = { page, x, y in
+            context.coordinator.onClick?(page, x, y)
+        }
         return pdfView
     }
 
@@ -758,26 +794,48 @@ struct PDFKitView: NSViewRepresentable {
 
     final class Coordinator: NSObject {
         var onClick: ((Int, Double, Double) -> Void)?
+        /// 记录当前已设置的 PDFDocument 的指针，避免重复设置触发重新布局
+        var currentDocumentIdentity: ObjectIdentifier?
+        var currentURL: URL?
+
         init(onClick: ((Int, Double, Double) -> Void)?) {
             self.onClick = onClick
         }
-        @objc func handlePDFClick(_ gesture: NSClickGestureRecognizer) {
-            guard let pdfView = gesture.view as? PDFView,
-                  let page = pdfView.currentPage,
-                  let onClick else { return }
-            let point = gesture.location(in: pdfView)
-            let converted = pdfView.convert(point, to: page)
-            let pageIndex = pdfView.document?.index(for: page) ?? 0
-            let pageHeight = page.bounds(for: pdfView.displayBox).height
-            onClick(pageIndex + 1, converted.x, pageHeight - converted.y)
-        }
     }
 
-    func updateNSView(_ pdfView: PDFView, context: Context) {
+    func updateNSView(_ pdfView: SyncTeXPDFView, context: Context) {
+        context.coordinator.onClick = onPDFClick
+
         if let doc = document {
-            pdfView.document = doc
-        } else if let url, let doc = PDFDocument(url: url) {
-            pdfView.document = doc
+            // 只在 document 对象真正变化时才重新设置，避免反复布局导致图层爆炸
+            let newIdentity = ObjectIdentifier(doc)
+            if context.coordinator.currentDocumentIdentity != newIdentity {
+                context.coordinator.currentDocumentIdentity = newIdentity
+                context.coordinator.currentURL = nil
+                pdfView.document = doc
+            }
+        } else if let url = url {
+            if context.coordinator.currentURL != url {
+                context.coordinator.currentURL = url
+                context.coordinator.currentDocumentIdentity = nil
+                pdfView.document = PDFDocument(url: url)
+            }
         }
+    }
+}
+
+final class SyncTeXPDFView: PDFView {
+    var onPageClick: ((Int, Double, Double) -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+
+        let point = convert(event.locationInWindow, from: nil)
+        guard let page = page(for: point, nearest: false),
+              let doc = document else { return }
+        let pageIndex = doc.index(for: page)
+        let pagePoint = convert(point, to: page)
+        let pageHeight = page.bounds(for: displayBox).height
+        onPageClick?(pageIndex + 1, pagePoint.x, pageHeight - pagePoint.y)
     }
 }

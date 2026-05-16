@@ -180,12 +180,14 @@ struct SidebarView: View {
     // MARK: - 笔记行
 
     private func noteRow(_ note: NoteFile) -> some View {
-        Label {
+        let isSelected = manager.selectedNote?.id == note.id
+        return Label {
             Text(note.displayTitle)
                 .lineLimit(1)
+                .fontWeight(isSelected ? .semibold : .regular)
         } icon: {
-            Image(systemName: note.fileType.systemImage)
-                .foregroundColor(iconColor(for: note.fileType))
+            Image(systemName: isSelected ? fillIcon(for: note.fileType) : note.fileType.systemImage)
+                .foregroundColor(isSelected ? .accentColor : iconColor(for: note.fileType))
         }
         .contextMenu {
             Button("重命名") {
@@ -198,6 +200,19 @@ struct SidebarView: View {
             }
         }
         .tag(note.id)
+    }
+
+    private func fillIcon(for type: NoteFileType) -> String {
+        switch type {
+        case .markdown:    return "doc.text.fill"
+        case .latexSource: return "doc.richtext.fill"
+        case .bibTeX:      return "books.vertical.fill"
+        case .styleClass:  return "gearshape.fill"
+        case .image:       return "photo.fill"
+        case .pdfDoc:      return "doc.fill"
+        case .logAux:      return "doc.text.fill"
+        case .other:       return "doc.fill"
+        }
     }
 
     private func iconColor(for type: NoteFileType) -> Color {

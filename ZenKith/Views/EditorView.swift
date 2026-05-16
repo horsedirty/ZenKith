@@ -10,7 +10,7 @@ struct EditorView: NSViewRepresentable {
         Coordinator(text: $text, language: language)
     }
     
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> NSView {
         let scrollView = NSScrollView(frame: .zero)
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
@@ -76,43 +76,64 @@ struct EditorView: NSViewRepresentable {
         
         // 连接语法高亮
         context.coordinator.setupHighlighting(for: textView)
-        
-        return scrollView
+
+        let outerContainer = NSView(frame: .zero)
+        outerContainer.addSubview(scrollView)
+        scrollView.frame = outerContainer.bounds
+        scrollView.autoresizingMask = [.width, .height]
+        context.coordinator.setupFindBar(in: outerContainer)
+        context.coordinator.setupFindBarShortcut()
+        return outerContainer
     }
     
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let tv = scrollView.documentView as? NSTextView else { return }
-        
-        let font = NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular)
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let scrollView = nsView.subviews.first(where: { $0 is NSScrollView }) as? NSScrollView,
+              let tv = scrollView.documentView as? NSTextView else { return }
+
         let dark = NSApp.effectiveAppearance.name == .darkAqua || NSApp.effectiveAppearance.name == .vibrantDark
-        
-        // 先设置视觉属性，避免后续赋值覆盖语法高亮
-        tv.font = font
-        tv.backgroundColor = dark
-        ? NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-        : NSColor(red: 0.98, green: 0.98, blue: 0.98, alpha: 1)
-        tv.textColor = dark
-        ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
-        : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-        tv.insertionPointColor = .controlAccentColor
-        
-        if let ruler = context.coordinator.rulerView {
-            ruler.font = font
-            ruler.backgroundColor = dark
-            ? NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1)
-            : NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1)
-            ruler.textColor = dark
-            ? NSColor(red: 0.45, green: 0.45, blue: 0.50, alpha: 1)
-            : NSColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
+        let fontSizeChanged = abs(context.coordinator.lastFontSize - fontSize) > 0.1
+        let darkChanged = context.coordinator.lastDark != dark
+
+        if fontSizeChanged || darkChanged {
+            let font = NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular)
+            tv.font = font
+            tv.backgroundColor = dark
+            ? NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+            : NSColor(red: 0.98, green: 0.98, blue: 0.98, alpha: 1)
+            tv.textColor = dark
+            ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
+            : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
+            tv.insertionPointColor = .controlAccentColor
+
+            if let ruler = context.coordinator.rulerView {
+                ruler.font = font
+                ruler.backgroundColor = dark
+                ? NSColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1)
+                : NSColor(red: 0.96, green: 0.96, blue: 0.96, alpha: 1)
+                ruler.textColor = dark
+                ? NSColor(red: 0.45, green: 0.45, blue: 0.50, alpha: 1)
+                : NSColor(red: 0.55, green: 0.55, blue: 0.60, alpha: 1)
+            }
+
+            context.coordinator.lastFontSize = fontSize
+            context.coordinator.lastDark = dark
         }
         
         // 外部文本变更
         var textDidChange = false
         if tv.string != text, !context.coordinator.isInternalEdit {
-            context.coordinator.isProgrammaticChange = true
-            tv.textStorage?.setAttributedString(NSAttributedString(string: text))
-            tv.undoManager?.removeAllActions()
-            context.coordinator.isProgrammaticChange = false
+            if tv.hasMarkedText() {
+            } else if let pending = context.coordinator.pendingText, pending != text {
+                context.coordinator.isProgrammaticChange = true
+                text = pending
+                context.coordinator.pendingText = nil
+                context.coordinator.isProgrammaticChange = false
+            } else {
+                context.coordinator.isProgrammaticChange = true
+                tv.textStorage?.setAttributedString(NSAttributedString(string: text))
+                tv.undoManager?.removeAllActions()
+                context.coordinator.isProgrammaticChange = false
+            }
             textDidChange = true
         }
         
@@ -121,11 +142,6 @@ struct EditorView: NSViewRepresentable {
         
         // 外部文本变更后补充全量高亮（updateHighlighterIfNeeded 可能因无主题/语言变化而跳过）
         if textDidChange {
-            context.coordinator.applyFullHighlightIfNeeded(to: tv)
-        }
-        
-        // 任何重绘时 LaTeX 模式下强制刷新全量高亮，防止默认属性覆盖
-        if language == .latex {
             context.coordinator.applyFullHighlightIfNeeded(to: tv)
         }
         
@@ -142,6 +158,12 @@ struct EditorView: NSViewRepresentable {
         fileprivate weak var scrollView: NSScrollView?
         fileprivate weak var rulerView: LineNumberRulerView?
         fileprivate var lineHighlightLayer: CAShapeLayer?
+        fileprivate var pendingText: String?
+        fileprivate var lastFontSize: Double = 0
+        fileprivate var lastDark: Bool = false
+        fileprivate weak var findBarContainer: NSView?
+        fileprivate var findBarHost: NSView?
+        fileprivate var showFindBar = false
         
         let completionEngine = LatexCompletionEngine()
 
@@ -212,6 +234,18 @@ struct EditorView: NSViewRepresentable {
                 if let keys = notification.userInfo?["keys"] as? [String] {
                     Task { @MainActor [weak self] in
                         self?.completionEngine.setCiteKeys(keys)
+                    }
+                }
+            }
+
+            NotificationCenter.default.addObserver(
+                forName: .refLabelsDidUpdate,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                if let labels = notification.userInfo?["labels"] as? [String] {
+                    Task { @MainActor [weak self] in
+                        self?.completionEngine.setRefLabels(labels)
                     }
                 }
             }
@@ -292,16 +326,16 @@ struct EditorView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let tv = textView else { return }
             if isProgrammaticChange { return }
+
+            if tv.hasMarkedText() {
+                pendingText = tv.string
+                return
+            }
+
             isInternalEdit = true
             text = tv.string
+            pendingText = nil
             isInternalEdit = false
-
-            if language == .latex {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, let tv = self.textView else { return }
-                    self.completionEngine.evaluateState(in: tv)
-                }
-            }
         }
 
         // MARK: - Selection Change
@@ -438,6 +472,56 @@ struct EditorView: NSViewRepresentable {
             tv.window?.makeFirstResponder(tv)
 
             highlightLine(lineNumber)
+        }
+
+        // MARK: - Find Bar
+
+        func setupFindBar(in container: NSView) {
+            self.findBarContainer = container
+        }
+
+        func setupFindBarShortcut() {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, let tv = self.textView,
+                      tv.window?.firstResponder == tv else { return event }
+                let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                if event.charactersIgnoringModifiers == "f" && mods == .command {
+                    self.toggleFindBar()
+                    return nil
+                }
+                if event.keyCode == 53 {
+                    self.hideFindBar()
+                }
+                return event
+            }
+        }
+
+        func toggleFindBar() {
+            guard let container = findBarContainer else { return }
+            if showFindBar {
+                hideFindBar()
+                return
+            }
+            showFindBar = true
+            let bar = EditorFindBar(
+                isVisible: Binding(
+                    get: { self.showFindBar },
+                    set: { self.showFindBar = $0 }
+                ),
+                textView: textView
+            )
+            let host = NSHostingView(rootView: bar)
+            host.autoresizingMask = [NSView.AutoresizingMask.width]
+            let barHeight: CGFloat = 36
+            host.frame = NSRect(x: 0, y: container.bounds.height - barHeight, width: container.bounds.width, height: barHeight)
+            container.addSubview(host)
+            findBarHost = host
+        }
+
+        func hideFindBar() {
+            showFindBar = false
+            findBarHost?.removeFromSuperview()
+            findBarHost = nil
         }
 
         private func highlightLine(_ lineNumber: Int) {

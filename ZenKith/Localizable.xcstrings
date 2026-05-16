@@ -1,0 +1,634 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "" : {
+
+    },
+    "·" : {
+
+    },
+    "(%@)" : {
+
+    },
+    "[%lld]" : {
+
+    },
+    "%@" : {
+
+    },
+    "%@\n二进制文件，无法编辑" : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld pt" : {
+
+    },
+    "%lld 页 · %lld 段" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld 页 · %2$lld 段"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+
+    },
+    "|" : {
+
+    },
+    "▲" : {
+
+    },
+    "▼" : {
+
+    },
+    "📎 引用来源" : {
+
+    },
+    "AI" : {
+
+    },
+    "AI 助手" : {
+
+    },
+    "AI 助手 (Cmd+Shift+I)" : {
+
+    },
+    "AI 配置" : {
+
+    },
+    "API Key" : {
+
+    },
+    "API 密钥管理" : {
+
+    },
+    "API 端点" : {
+
+    },
+    "API 端点 URL" : {
+
+    },
+    "check_updates" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for Updates..."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查更新..."
+          }
+        }
+      }
+    },
+    "Cmd+B 或点击工具栏编译按钮 (%@)" : {
+
+    },
+    "Cmd+滚轮 调节字号" : {
+
+    },
+    "export" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出"
+          }
+        }
+      }
+    },
+    "export_as" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export as %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出为 %@"
+          }
+        }
+      }
+    },
+    "new_folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Folder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹"
+          }
+        }
+      }
+    },
+    "new_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Note"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建笔记"
+          }
+        }
+      }
+    },
+    "PDF 翻译" : {
+
+    },
+    "pdf_translation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF Translation..."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 翻译..."
+          }
+        }
+      }
+    },
+    "SecretId" : {
+
+    },
+    "SecretKey" : {
+
+    },
+    "SecretKey 存储在系统钥匙串中，仅本应用可读取" : {
+
+    },
+    "switch_work_dir" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch Working Directory..."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换工作目录..."
+          }
+        }
+      }
+    },
+    "toggle_ai" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle AI Assistant"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示/隐藏 AI 助手"
+          }
+        }
+      }
+    },
+    "toggle_sidebar" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle Sidebar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示/隐藏 目录栏"
+          }
+        }
+      }
+    },
+    "view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示"
+          }
+        }
+      }
+    },
+    "ZenKith" : {
+
+    },
+    "中文" : {
+
+    },
+    "主题" : {
+
+    },
+    "从左侧选择已有文档，或点击 + 导入新的 PDF 文件" : {
+
+    },
+    "使用系统内置翻译，隐私安全，支持离线" : {
+
+    },
+    "俄语" : {
+
+    },
+    "关闭" : {
+
+    },
+    "切换 AI 模型 / 服务商" : {
+
+    },
+    "切换或管理历史会话" : {
+
+    },
+    "切换文档大纲 (LaTeX)" : {
+
+    },
+    "切换目录..." : {
+
+    },
+    "删除" : {
+
+    },
+    "删除「%@」" : {
+
+    },
+    "包含笔记" : {
+
+    },
+    "印地语" : {
+
+    },
+    "印尼语" : {
+
+    },
+    "发送 (Cmd+Return)" : {
+
+    },
+    "取消" : {
+
+    },
+    "名称" : {
+
+    },
+    "启动时打开上次文件" : {
+
+    },
+    "启用联网搜索（需配置搜索 API）" : {
+
+    },
+    "回到默认目录" : {
+
+    },
+    "土耳其语" : {
+
+    },
+    "在左侧创建一个新笔记开始写作\nCmd+N 快速新建" : {
+
+    },
+    "大纲" : {
+
+    },
+    "字体大小" : {
+
+    },
+    "字数: %lld" : {
+
+    },
+    "完成" : {
+
+    },
+    "密钥安全存储在系统钥匙串中" : {
+
+    },
+    "导入 PDF" : {
+
+    },
+    "导出笔记" : {
+
+    },
+    "将当前笔记内容作为上下文发送给 AI" : {
+
+    },
+    "将错误发送给 AI 诊断" : {
+
+    },
+    "尚未编译" : {
+
+    },
+    "展开侧边栏" : {
+
+    },
+    "已完成" : {
+
+    },
+    "开始翻译" : {
+
+    },
+    "开通机器翻译服务" : {
+
+    },
+    "引擎" : {
+
+    },
+    "待翻译" : {
+
+    },
+    "德语" : {
+
+    },
+    "思考过程" : {
+
+    },
+    "意大利语" : {
+
+    },
+    "打开" : {
+
+    },
+    "折叠侧边栏" : {
+
+    },
+    "插入 LaTeX 代码片段" : {
+
+    },
+    "搜索参考文献..." : {
+
+    },
+    "文件夹" : {
+
+    },
+    "文献" : {
+
+    },
+    "新名称" : {
+
+    },
+    "新建对话" : {
+
+    },
+    "新建文件夹" : {
+
+    },
+    "新建笔记" : {
+
+    },
+    "无匹配命令" : {
+
+    },
+    "无法加载图片" : {
+
+    },
+    "日语" : {
+
+    },
+    "显示目录栏 (Cmd+Shift+S)" : {
+
+    },
+    "显示行号" : {
+
+    },
+    "暂无历史会话" : {
+
+    },
+    "服务商" : {
+
+    },
+    "未找到参考文献" : {
+
+    },
+    "查看编译日志" : {
+
+    },
+    "模型" : {
+
+    },
+    "模型名称" : {
+
+    },
+    "模型名称（留空使用默认）" : {
+
+    },
+    "正在编译 (第 %lld/%lld 轮)..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "正在编译 (第 %1$lld/%2$lld 轮)..."
+          }
+        }
+      }
+    },
+    "此文件类型不可编辑" : {
+
+    },
+    "每月 500 万字符免费额度，超出后 ¥50 / 百万字符" : {
+
+    },
+    "法语" : {
+
+    },
+    "泰语" : {
+
+    },
+    "浅色" : {
+
+    },
+    "深度思考中…" : {
+
+    },
+    "深色" : {
+
+    },
+    "清空当前对话" : {
+
+    },
+    "源语言" : {
+
+    },
+    "生成中…" : {
+
+    },
+    "目标语言" : {
+
+    },
+    "确定" : {
+
+    },
+    "笔记" : {
+
+    },
+    "编译 LaTeX (Cmd+B)" : {
+
+    },
+    "编译日志" : {
+
+    },
+    "编辑器" : {
+
+    },
+    "繁体中文" : {
+
+    },
+    "翻译" : {
+
+    },
+    "翻译中 %lld%%" : {
+
+    },
+    "翻译引擎" : {
+
+    },
+    "联网搜索" : {
+
+    },
+    "腾讯云 API 密钥" : {
+
+    },
+    "自动保存" : {
+
+    },
+    "自动换行" : {
+
+    },
+    "自动检测" : {
+
+    },
+    "英语" : {
+
+    },
+    "获取 API 密钥" : {
+
+    },
+    "葡萄牙语" : {
+
+    },
+    "行 %lld:" : {
+
+    },
+    "西班牙语" : {
+
+    },
+    "语言设置" : {
+
+    },
+    "费用说明" : {
+
+    },
+    "越南语" : {
+
+    },
+    "跟随系统" : {
+
+    },
+    "输入消息..." : {
+
+    },
+    "输入笔记的新名称（不含后缀）" : {
+
+    },
+    "返回上级" : {
+
+    },
+    "选择 LaTeX 编译器" : {
+
+    },
+    "选择一篇笔记以预览" : {
+
+    },
+    "选择或导入 PDF" : {
+
+    },
+    "选择编写语言：Markdown 或 LaTeX" : {
+
+    },
+    "通用" : {
+
+    },
+    "配置 API 设置" : {
+
+    },
+    "重命名" : {
+
+    },
+    "重复键: %@" : {
+
+    },
+    "重新翻译全部" : {
+
+    },
+    "重试" : {
+
+    },
+    "错误" : {
+
+    },
+    "阿拉伯语" : {
+
+    },
+    "附加文件 (图片、代码、PDF 等)" : {
+
+    },
+    "隐藏目录栏 (Cmd+Shift+S)" : {
+
+    },
+    "韩语" : {
+
+    },
+    "马来语" : {
+
+    },
+    "高级配置…" : {
+
+    }
+  },
+  "version" : "1.0"
+}

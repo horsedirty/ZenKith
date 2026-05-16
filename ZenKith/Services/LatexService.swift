@@ -203,13 +203,25 @@ final class LatexService {
     private static func needsBibtexPass(auxURL: URL, workDir: URL) -> Bool {
         guard let auxContent = try? String(contentsOf: auxURL, encoding: .utf8) else { return false }
         guard auxContent.contains("\\bibdata{") || auxContent.contains("\\bibstyle{") || auxContent.contains("\\citation{") else { return false }
-        return (try? FileManager.default.contentsOfDirectory(at: workDir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
-            .contains(where: { $0.pathExtension.lowercased() == "bib" })) ?? false
+        guard let enumerator = FileManager.default.enumerator(at: workDir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return false }
+        for case let fileURL as URL in enumerator {
+            if fileURL.pathExtension.lowercased() == "bib" { return true }
+        }
+        return false
     }
 
     private static func needsThirdPass(logURL: URL) -> Bool {
         guard let log = try? String(contentsOf: logURL, encoding: .utf8) else { return false }
-        return log.contains("Rerun to get cross-references") || log.contains("rerun LaTeX") || log.contains("Label(s) may have changed")
+        let rerunPatterns = [
+            "Rerun to get cross-references",
+            "rerun LaTeX",
+            "Label(s) may have changed",
+            "There were undefined references",
+            "Citation(s) may have changed",
+            "Rerun LaTeX",
+            "Please (re)run BibTeX",
+        ]
+        return rerunPatterns.contains(where: { log.contains($0) })
     }
 
     private static func readPDF(_ url: URL) -> Data? {

@@ -1,5 +1,56 @@
 import SwiftUI
 
+struct BibEntryRow: View {
+    let entry: BibEntry
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(entry.key)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.accentColor)
+                    .lineLimit(1)
+                Spacer()
+                Text(entry.type)
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color(nsColor: .tertiarySystemFill))
+                    .cornerRadius(3)
+            }
+            Text(entry.title)
+                .font(.system(size: 11))
+                .lineLimit(2)
+                .foregroundColor(.primary)
+            HStack(spacing: 4) {
+                Text(entry.author)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                if !entry.year.isEmpty {
+                    Text("(\(entry.year))")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
+                if !entry.journal.isEmpty {
+                    Text("·")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(nsColor: .tertiaryLabelColor))
+                    Text(entry.journal)
+                        .font(.system(size: 10, design: .serif).italic())
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { onSelect(entry.key) }
+    }
+}
+
 struct BibManagerView: View {
     @ObservedObject var bibManager: BibManager
     var onSelectCiteKey: (String) -> Void
@@ -26,23 +77,7 @@ struct BibManagerView: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(bibManager.filteredEntries) { entry in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.key).font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundColor(.accentColor)
-                        Text(entry.title).font(.system(size: 11)).lineLimit(2)
-                        HStack {
-                            Text(entry.author).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
-                            if !entry.year.isEmpty {
-                                Text("(\(entry.year))").font(.system(size: 10)).foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            Text(entry.type).font(.system(size: 9)).foregroundColor(.secondary)
-                                .padding(.horizontal, 4).padding(.vertical, 1)
-                                .background(Color(nsColor: .controlBackgroundColor)).cornerRadius(3)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { onSelectCiteKey(entry.key) }
+                    BibEntryRow(entry: entry, onSelect: onSelectCiteKey)
                 }
                 .listStyle(.plain)
             }

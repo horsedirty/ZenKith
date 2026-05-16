@@ -33,6 +33,7 @@ enum FilterMode {
     case command
     case beginEnvironment
     case citeKey
+    case refLabel
 }
 
 // MARK: - Completion Item
@@ -87,9 +88,14 @@ final class LatexCompletionEngine: ObservableObject {
     private var filterTask: Task<Void, Never>?
     private let allCommands: [LatexCompletion]
     private var citeKeys: [String] = []
+    private var refLabels: [String] = []
 
     func setCiteKeys(_ keys: [String]) {
         self.citeKeys = keys
+    }
+
+    func setRefLabels(_ labels: [String]) {
+        self.refLabels = labels
     }
 
     init() {
@@ -125,6 +131,15 @@ final class LatexCompletionEngine: ObservableObject {
                     .map { key in
                         LatexCompletion(command: key, displayName: key, insertionText: key, category: .reference, detail: "引用")
                     }
+            case .refLabel:
+                let lower = prefix.lowercased()
+                let labels = self.refLabels
+                results = labels
+                    .filter { $0.lowercased().contains(lower) }
+                    .prefix(30)
+                    .map { label in
+                        LatexCompletion(command: label, displayName: label, insertionText: label, category: .reference, detail: "标签引用")
+                    }
             }
 
             guard !Task.isCancelled else { return }
@@ -148,6 +163,12 @@ final class LatexCompletionEngine: ObservableObject {
         if let beginRange = detectBeginPrefix(in: text, cursorPos: cursorPos) {
             let prefix = text.substring(with: NSRange(location: beginRange.location + 7, length: cursorPos - beginRange.location - 7))
             filterAsync(prefix: prefix, range: beginRange, filterMode: .beginEnvironment)
+            return
+        }
+
+        if let refRange = detectRefPrefix(in: text, cursorPos: cursorPos) {
+            let prefix = text.substring(with: NSRange(location: refRange.location + 5, length: cursorPos - refRange.location - 5))
+            filterAsync(prefix: prefix, range: refRange, filterMode: .refLabel)
             return
         }
 
@@ -203,6 +224,21 @@ final class LatexCompletionEngine: ObservableObject {
             let substring = text.substring(with: NSRange(location: citeIdx, length: cursorPos - citeIdx))
             if !substring.contains("}") {
                 return NSRange(location: citeIdx, length: cursorPos - citeIdx)
+            }
+        }
+        return nil
+    }
+
+    private func detectRefPrefix(in text: NSString, cursorPos: Int) -> NSRange? {
+        let pattern = "\\ref{"
+        let searchStart = max(0, cursorPos - 50)
+        let searchRange = NSRange(location: searchStart, length: cursorPos - searchStart)
+        let full = text.substring(with: searchRange)
+        if let lastRef = full.range(of: pattern, options: .backwards) {
+            let refIdx = searchStart + full.distance(from: full.startIndex, to: lastRef.lowerBound)
+            let substring = text.substring(with: NSRange(location: refIdx, length: cursorPos - refIdx))
+            if !substring.contains("}") {
+                return NSRange(location: refIdx, length: cursorPos - refIdx)
             }
         }
         return nil

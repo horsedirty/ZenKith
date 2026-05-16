@@ -51,33 +51,31 @@ struct ZenKithApp: App {
 
     @CommandsBuilder
     private var commandMenus: some Commands {
-        // 文件菜单：新建笔记、新建文件夹、切换目录
         CommandGroup(after: .newItem) {
-            Button("新建笔记") {
+            Button(String(localized: "new_note")) {
                 manager.createNote(language: settings.editorLanguage)
             }
             .keyboardShortcut("n", modifiers: [.command])
 
-            Button("新建文件夹") {
+            Button(String(localized: "new_folder")) {
                 manager.createFolder()
             }
 
             Divider()
 
-            Button("PDF 翻译...") {
+            Button(String(localized: "pdf_translation")) {
                 NotificationCenter.default.post(name: .openPDFTranslation, object: nil)
             }
             .keyboardShortcut("t", modifiers: [.command, .shift])
 
             Divider()
 
-            Button("切换工作目录...") {
+            Button(String(localized: "switch_work_dir")) {
                 manager.selectDirectoryPanel()
             }
         }
 
-        // 显示菜单：视图模式切换 + AI 开关
-        CommandMenu("显示") {
+        CommandMenu(String(localized: "view")) {
             ForEach(ViewMode.allCases, id: \.self) { mode in
                 Button(mode.displayName) {
                     settings.viewMode = mode
@@ -86,21 +84,20 @@ struct ZenKithApp: App {
 
             Divider()
 
-            Button("显示/隐藏 目录栏") {
+            Button(String(localized: "toggle_sidebar")) {
                 NotificationCenter.default.post(name: .toggleSidebar, object: nil)
             }
             .keyboardShortcut("s", modifiers: [.command, .shift])
 
             Divider()
 
-            Button("显示/隐藏 AI 助手") {
+            Button(String(localized: "toggle_ai")) {
                 NotificationCenter.default.post(name: .toggleAIDrawer, object: nil)
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
         }
 
-        // 导出菜单：四种格式
-        CommandMenu("导出") {
+        CommandMenu(String(localized: "export")) {
             exportButton("PDF", format: .pdf, shortcut: "1")
             exportButton("Word (.docx)", format: .docx, shortcut: "2")
             exportButton("纯文本 (.txt)", format: .txt, shortcut: "3")
@@ -108,7 +105,7 @@ struct ZenKithApp: App {
         }
 
         CommandGroup(replacing: .help) {
-            Button("检查更新...") {
+            Button(String(localized: "check_updates")) {
                 if let url = URL(string: "https://github.com/horsedirty/ZenKith/releases") {
                     NSWorkspace.shared.open(url)
                 }
@@ -117,7 +114,7 @@ struct ZenKithApp: App {
     }
 
     private func exportButton(_ title: String, format: ExportService.ExportFormat, shortcut: String) -> some View {
-        Button("导出为 \(title)") {
+        Button(String(format: String(localized: "export_as"), title)) {
             NotificationCenter.default.post(
                 name: .exportNote,
                 object: nil,

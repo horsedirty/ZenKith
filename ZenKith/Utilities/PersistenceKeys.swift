@@ -17,4 +17,5 @@ extension Notification.Name {
     static let sendCompileErrorsToAI = Notification.Name("ZenKith.sendCompileErrorsToAI")
     static let sendSelectionToAI = Notification.Name("ZenKith.sendSelectionToAI")
     static let bibKeysDidUpdate = Notification.Name("ZenKith.bibKeysDidUpdate")
+    static let refLabelsDidUpdate = Notification.Name("ZenKith.refLabelsDidUpdate")
 }

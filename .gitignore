@@ -3,3 +3,4 @@ build/
 DerivedData/
 *.xcworkspace/xcuserdata/
 .DS_Store
+.superpowers/

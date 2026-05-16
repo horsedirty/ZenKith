@@ -99,6 +99,8 @@ final class NotesManager: ObservableObject {
             return
         }
 
+        let selectedURL = selectedNote?.fileURL
+
         var noteFiles: [NoteFile] = []
         var folderURLs: [URL] = []
 
@@ -123,6 +125,10 @@ final class NotesManager: ObservableObject {
 
         notes = noteFiles.sorted { $0.modifiedDate > $1.modifiedDate }
         folders = folderURLs.sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+        if let url = selectedURL, let note = notes.first(where: { $0.fileURL == url }) {
+            selectedNote = note
+        }
     }
 
     // MARK: - 文件操作
