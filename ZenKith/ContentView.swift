@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var leftPanelTab = 0
     @State private var cachedOutlineHash: Int = 0
     @State private var cachedOutlineItems: [OutlineItem] = []
+    @State private var labelsUpdateTask: DispatchWorkItem? = nil
 
     // 编译缓存：texURL → (PDF data, 源码hash)
     @State private var compileCache: [URL: (data: Data, hash: Int)] = [:]
@@ -69,14 +70,23 @@ struct ContentView: View {
             }
             .onDisappear { stopScrollMonitor() }
             .onChange(of: manager.editingContent) {
+                // Auto-save retains its own 2-second Combine debounce — keep it immediate.
                 DispatchQueue.main.async { manager.scheduleAutoSave() }
-                let labels = extractLabels(from: manager.editingContent)
-                NotificationCenter.default.post(
-                    name: .refLabelsDidUpdate,
-                    object: nil,
-                    userInfo: ["labels": labels]
-                )
-                updateOutlineCache()
+
+                // Label extraction and outline parsing are expensive on large documents.
+                // Debounce to avoid per-keystroke regex work (especially during IME composition).
+                labelsUpdateTask?.cancel()
+                let task = DispatchWorkItem {
+                    let labels = extractLabels(from: manager.editingContent)
+                    NotificationCenter.default.post(
+                        name: .refLabelsDidUpdate,
+                        object: nil,
+                        userInfo: ["labels": labels]
+                    )
+                    updateOutlineCache()
+                }
+                labelsUpdateTask = task
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: task)
             }
             .onChange(of: bibManager.allKeys) { newKeys in
                 NotificationCenter.default.post(
