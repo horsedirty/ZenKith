@@ -48,7 +48,17 @@ struct EditorView: NSViewRepresentable {
         ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
         : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
         textView.insertionPointColor = .controlAccentColor
-        
+
+        // Pin typingAttributes so newly typed characters (especially IME-composed CJK)
+        // share the exact same font/colour as existing text. Without this, NSTextView
+        // builds typingAttributes lazily and inserted CJK characters end up at native
+        // PingFang metrics, while existing CJK runs render via SF-Mono → PingFang
+        // cascading, scaled to SF Mono metrics — producing a visible size mismatch.
+        textView.typingAttributes = [
+            .font: font,
+            .foregroundColor: textView.textColor ?? NSColor.labelColor
+        ]
+
         scrollView.documentView = textView
         
         let rulerView = LineNumberRulerView(scrollView: scrollView, orientation: .verticalRuler)
@@ -105,6 +115,13 @@ struct EditorView: NSViewRepresentable {
             : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
             tv.insertionPointColor = .controlAccentColor
 
+            // Keep typingAttributes in sync with the new font/colour so IME-composed
+            // CJK characters render at the same size as existing text.
+            tv.typingAttributes = [
+                .font: font,
+                .foregroundColor: tv.textColor ?? NSColor.labelColor
+            ]
+
             if let ruler = context.coordinator.rulerView {
                 ruler.font = font
                 ruler.backgroundColor = dark
@@ -134,7 +151,17 @@ struct EditorView: NSViewRepresentable {
                 context.coordinator.isProgrammaticChange = false
             } else {
                 context.coordinator.isProgrammaticChange = true
-                tv.textStorage?.setAttributedString(NSAttributedString(string: text))
+                // Load with the same font/colour as typingAttributes so existing chars
+                // and newly typed chars share an identical .font attribute. Without an
+                // explicit font here, AppKit's CJK font substitution can pick metrics
+                // that differ from what typingAttributes-driven inserts use.
+                let attrs: [NSAttributedString.Key: Any] = tv.typingAttributes.isEmpty
+                    ? [
+                        .font: tv.font ?? NSFont.monospacedSystemFont(ofSize: 14, weight: .regular),
+                        .foregroundColor: tv.textColor ?? NSColor.labelColor
+                    ]
+                    : tv.typingAttributes
+                tv.textStorage?.setAttributedString(NSAttributedString(string: text, attributes: attrs))
                 tv.undoManager?.removeAllActions()
                 context.coordinator.isProgrammaticChange = false
             }
@@ -304,14 +331,16 @@ struct EditorView: NSViewRepresentable {
                     }
                     if let ts = tv.textStorage {
                         let fullRange = NSRange(location: 0, length: ts.length)
-                        let defaultAttrs: [NSAttributedString.Key: Any] = [
-                            .font: NSFont.monospacedSystemFont(ofSize: max(12, min(32, fontSize)), weight: .regular),
-                            .foregroundColor: dark
+                        let defaultColor: NSColor = dark
                             ? NSColor(red: 0.90, green: 0.90, blue: 0.92, alpha: 1)
                             : NSColor(red: 0.11, green: 0.11, blue: 0.12, alpha: 1)
-                        ]
                         ts.beginEditing()
-                        ts.setAttributes(defaultAttrs, range: fullRange)
+                        // Only reset foreground colour; leave font attribute alone so
+                        // NSLayoutManager's CJK font cascading from tv.font remains intact.
+                        // (setAttributes here would wipe per-glyph substitution and cause
+                        // Chinese characters to render at mismatched sizes vs newly typed text.)
+                        ts.removeAttribute(.foregroundColor, range: fullRange)
+                        ts.addAttribute(.foregroundColor, value: defaultColor, range: fullRange)
                         ts.endEditing()
                     }
                 }
