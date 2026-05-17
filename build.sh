@@ -17,10 +17,10 @@ EXPORT_DIR="$BUILD_DIR/$CONFIG"
 EXPORT_OPTIONS="$PROJECT_DIR/ExportOptions.plist"
 
 # ---------- 读取版本号 ----------
-VERSION=$(grep -A10 "name = Release;" "$PROJECT_DIR/$PROJECT_FILE/project.pbxproj" \
-    | grep "MARKETING_VERSION" | head -1 | awk -F ' = ' '{print $2}' | tr -d ';')
-BUILD=$(grep -A10 "name = Release;" "$PROJECT_DIR/$PROJECT_FILE/project.pbxproj" \
-    | grep "CURRENT_PROJECT_VERSION" | head -1 | awk -F ' = ' '{print $2}' | tr -d ';')
+VERSION=$(grep "MARKETING_VERSION" "$PROJECT_DIR/$PROJECT_FILE/project.pbxproj" \
+    | grep -v Tests | head -1 | awk -F ' = ' '{print $2}' | tr -d ';' | tr -d '"')
+BUILD=$(grep "CURRENT_PROJECT_VERSION" "$PROJECT_DIR/$PROJECT_FILE/project.pbxproj" \
+    | grep -v Tests | head -1 | awk -F ' = ' '{print $2}' | tr -d ';')
 DMG_NAME="ZenKith_v${VERSION}.dmg"
 
 echo "========================================"
