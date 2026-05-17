@@ -123,7 +123,11 @@ final class LatexSyntaxHighlighter {
         let text = textStorage.string
 
         textStorage.beginEditing()
-        textStorage.setAttributes(defaultAttributes, range: fullRange)
+        // Use addAttributes (not setAttributes) so we don't wipe NSLayoutManager's
+        // font substitution for CJK characters. The text view's `.font` property
+        // already sets the base font; we just need to layer colour on top.
+        textStorage.removeAttribute(.foregroundColor, range: fullRange)
+        textStorage.addAttribute(.foregroundColor, value: theme.defaultText, range: fullRange)
         applyTokenHighlighting(to: textStorage, text: text, offset: 0)
         textStorage.endEditing()
     }
@@ -163,7 +167,13 @@ final class LatexSyntaxHighlighter {
         let substring = nsText.substring(with: lineRange)
 
         textStorage.beginEditing()
-        textStorage.setAttributes(defaultAttributes, range: lineRange)
+        // Reset only colour-related attributes to default; do NOT touch `.font`.
+        // `setAttributes` would also wipe NSLayoutManager's per-glyph font substitution
+        // for CJK characters (system-monospaced font has no CJK glyphs and relies on
+        // cascading), which makes Chinese characters disappear visually while the
+        // underlying string remains intact.
+        textStorage.removeAttribute(.foregroundColor, range: lineRange)
+        textStorage.addAttribute(.foregroundColor, value: theme.defaultText, range: lineRange)
         applyTokenHighlighting(to: textStorage, text: substring, offset: lineRange.location)
         textStorage.endEditing()
     }
